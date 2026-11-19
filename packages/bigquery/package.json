@@ -9,6 +9,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@dataform-cost-check/core": "workspace:*"
+    "@dataform-cost-check/core": "workspace:*",
+    "google-auth-library": "^11.3.4"
   }
 }

@@ -1,5 +1,5 @@
-import { BYTES_PER_TIB, DEFAULT_CONFIG, FakeDryRunner } from "@driftline/core";
-import type { Model } from "@driftline/core";
+import { BYTES_PER_TIB, DEFAULT_CONFIG, FakeDryRunner } from "@dataform-cost-check/core";
+import type { Model } from "@dataform-cost-check/core";
 import { describe, expect, it } from "vitest";
 import { runCheck } from "../src/run.ts";
 

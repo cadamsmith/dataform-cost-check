@@ -1,4 +1,4 @@
-import type { DryRunResult, DryRunner } from "@driftline/core";
+import type { DryRunResult, DryRunner } from "@dataform-cost-check/core";
 
 export interface BigQueryDryRunnerOptions {
   /** Project the dry-run jobs are created in (billing project). */

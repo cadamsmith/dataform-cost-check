@@ -85,7 +85,7 @@ export type Estimate =
       readonly reason: string;
     };
 
-/** User configuration, normally read from `driftline.yml`. */
+/** User configuration, normally read from `dataform-cost-check.yml`. */
 export interface Config {
   /** USD per TiB scanned (on-demand pricing). */
   readonly pricePerTib: number;

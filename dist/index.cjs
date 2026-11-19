@@ -27101,7 +27101,7 @@ function buildReport(estimates, config) {
 }
 
 // ../core/src/render.ts
-var COMMENT_MARKER = "<!-- driftline-check -->";
+var COMMENT_MARKER = "<!-- dataform-cost-check -->";
 var UNITS = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"];
 var CAUSE_TEXT = {
   "partition-filter-removed": "the partition filter was removed"
@@ -27109,7 +27109,7 @@ var CAUSE_TEXT = {
 function renderComment(report) {
   const estimated = report.estimates.filter((e) => e.status === "estimated");
   const notEstimated = report.estimates.filter((e) => e.status !== "estimated");
-  const lines = [COMMENT_MARKER, "### Driftline Check: BigQuery estimate", ""];
+  const lines = [COMMENT_MARKER, "### Dataform Cost Check: BigQuery estimate", ""];
   if (report.estimates.length === 0) {
     lines.push("No models changed in this pull request, so there is nothing to estimate.", "");
     lines.push(footer(report));
@@ -27224,7 +27224,7 @@ function parseConfig(text) {
 }
 var ConfigError = class extends Error {
   constructor(message) {
-    super(`Invalid driftline config: ${message}`);
+    super(`Invalid dataform-cost-check.yml: ${message}`);
     this.name = "ConfigError";
   }
 };
@@ -27250,9 +27250,9 @@ async function runCheck(deps) {
 
 // src/main.ts
 async function main() {
-  const configPath = getInput("config-path") || "driftline.yml";
+  const configPath = getInput("config-path") || "dataform-cost-check.yml";
   const baseRef = getInput("base-ref");
-  info(`Driftline Check (pre-alpha). Base ref: ${baseRef || "(pull request base)"}`);
+  info(`Dataform Cost Check (pre-alpha). Base ref: ${baseRef || "(pull request base)"}`);
   const config = (0, import_node_fs.existsSync)(configPath) ? parseConfig((0, import_node_fs.readFileSync)(configPath, "utf8")) : DEFAULT_CONFIG;
   if (!(0, import_node_fs.existsSync)(configPath)) info(`No ${configPath} found; using defaults.`);
   const { report, comment } = await runCheck({

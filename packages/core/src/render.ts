@@ -4,7 +4,7 @@ type Estimated = Extract<Estimate, { status: "estimated" }>;
 type NotEstimated = Exclude<Estimate, { status: "estimated" }>;
 
 /** Hidden marker the action uses to find and update its own sticky comment. */
-export const COMMENT_MARKER = "<!-- driftline-check -->";
+export const COMMENT_MARKER = "<!-- dataform-cost-check -->";
 
 const UNITS = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"] as const;
 
@@ -16,7 +16,7 @@ const CAUSE_TEXT: Record<LikelyCause, string> = {
 export function renderComment(report: Report): string {
   const estimated = report.estimates.filter((e): e is Estimated => e.status === "estimated");
   const notEstimated = report.estimates.filter((e): e is NotEstimated => e.status !== "estimated");
-  const lines: string[] = [COMMENT_MARKER, "### Driftline Check: BigQuery estimate", ""];
+  const lines: string[] = [COMMENT_MARKER, "### Dataform Cost Check: BigQuery estimate", ""];
 
   if (report.estimates.length === 0) {
     lines.push("No models changed in this pull request, so there is nothing to estimate.", "");

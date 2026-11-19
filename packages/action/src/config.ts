@@ -1,8 +1,8 @@
-import { DEFAULT_CONFIG } from "@driftline/core";
-import type { Config } from "@driftline/core";
+import { DEFAULT_CONFIG } from "@dataform-cost-check/core";
+import type { Config } from "@dataform-cost-check/core";
 import { parse } from "yaml";
 
-/** Parse and validate `driftline.yml`. Missing keys fall back to defaults. */
+/** Parse and validate `dataform-cost-check.yml`. Missing keys fall back to defaults. */
 export function parseConfig(text: string): Config {
   const raw: unknown = parse(text) ?? {};
   if (!isRecord(raw)) throw new ConfigError("the config must be a YAML mapping");
@@ -36,7 +36,7 @@ export function parseConfig(text: string): Config {
 
 export class ConfigError extends Error {
   constructor(message: string) {
-    super(`Invalid driftline config: ${message}`);
+    super(`Invalid dataform-cost-check.yml: ${message}`);
     this.name = "ConfigError";
   }
 }

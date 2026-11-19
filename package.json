@@ -1,11 +1,11 @@
 {
-  "name": "driftline-check-monorepo",
+  "name": "dataform-cost-check-monorepo",
   "private": true,
   "description": "BigQuery cost estimates on every Dataform pull request",
   "license": "MIT",
   "author": "cadamsmith",
   "scripts": {
-    "build": "pnpm --filter @driftline/action build",
+    "build": "pnpm --filter @dataform-cost-check/action build",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

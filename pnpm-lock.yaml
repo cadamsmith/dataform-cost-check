@@ -208,7 +208,7 @@ importers:
       '@actions/core':
         specifier: ^3.0.1
         version: 3.0.1
-      '@driftline/core':
+      '@dataform-cost-check/core':
         specifier: workspace:*
         version: link:../core
       yaml:
@@ -217,7 +217,7 @@ importers:
 
   packages/bigquery:
     dependencies:
-      '@driftline/core':
+      '@dataform-cost-check/core':
         specifier: workspace:*
         version: link:../core
 
@@ -225,7 +225,7 @@ importers:
 
   packages/dataform:
     dependencies:
-      '@driftline/core':
+      '@dataform-cost-check/core':
         specifier: workspace:*
         version: link:../core
 

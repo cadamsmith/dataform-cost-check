@@ -1,4 +1,4 @@
-import type { Model } from "@driftline/core";
+import type { Model } from "@dataform-cost-check/core";
 
 /** Options for compiling a Dataform project. */
 export interface CompileOptions {

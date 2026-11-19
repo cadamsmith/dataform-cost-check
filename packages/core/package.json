@@ -1,5 +1,5 @@
 {
-  "name": "@driftline/core",
+  "name": "@dataform-cost-check/core",
   "version": "0.0.0",
   "private": true,
   "description": "Pure logic: diff, pricing, limits, comment rendering. No network.",

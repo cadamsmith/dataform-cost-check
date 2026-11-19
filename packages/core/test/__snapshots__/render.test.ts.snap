@@ -36,6 +36,7 @@ This change adds an estimated **+$6,750.92 / month**. :x: Over the $100.00 limit
 | \`customers\` | added | 0 B → 5.00 GiB | 1 | +$0.92 |
 
 - \`orders_daily\`: likely cause: a filter on the partitioned table \`proj.raw.orders\` was removed.
+- \`orders_daily\`: incremental, estimated from its incremental query. A full refresh would scan up to 3.10 TiB, not included in the monthly estimate.
 
 **Not estimated**
 

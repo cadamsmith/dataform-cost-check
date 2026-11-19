@@ -39,12 +39,17 @@ export function renderComment(report: Report): string {
     }
     lines.push("");
 
-    const causes = estimated.flatMap((e) =>
-      e.likelyCause === undefined
+    const notes = estimated.flatMap((e) => [
+      ...(e.likelyCause === undefined
         ? []
-        : [`- \`${e.name}\`: likely cause: ${causeText(e.likelyCause)}.`],
-    );
-    if (causes.length > 0) lines.push(...causes, "");
+        : [`- \`${e.name}\`: likely cause: ${causeText(e.likelyCause)}.`]),
+      ...(e.fullRefreshBytes === undefined
+        ? []
+        : [
+            `- \`${e.name}\`: incremental, estimated from its incremental query. A full refresh would scan up to ${formatBytes(e.fullRefreshBytes)}, not included in the monthly estimate.`,
+          ]),
+    ]);
+    if (notes.length > 0) lines.push(...notes, "");
   }
 
   if (notEstimated.length > 0) {

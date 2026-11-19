@@ -43,10 +43,8 @@ const SKIP_REASONS: Partial<Record<Model["type"], string>> = {
 
 /**
  * The SQL that represents a model's steady-state cost. Incremental models use the
- * incremental query; everything else uses the main query.
- *
- * TODO(milestone 2): also estimate the full-refresh query of incremental models and
- * report it separately.
+ * incremental query; everything else uses the main query. The full-refresh query of an
+ * incremental model is estimated separately (`Estimate.fullRefreshBytes`).
  */
 export function steadyStateSql(model: Model): string {
   return model.incrementalQuery ?? model.query;
@@ -92,9 +90,10 @@ export async function estimateChange(
     return { status: "skipped", ...common, reason: SKIP_REASONS[model.type] ?? "Not estimated." };
   }
 
-  const [baseResult, headResult] = await Promise.all([
+  const [baseResult, headResult, fullRefreshResult] = await Promise.all([
     base === undefined ? { bytes: 0 } : runner.estimate(steadyStateSql(base), base.location),
     head === undefined ? { bytes: 0 } : runner.estimate(steadyStateSql(head), head.location),
+    head?.incrementalQuery === undefined ? undefined : runner.estimate(head.query, head.location),
   ]);
 
   if ("error" in baseResult) {
@@ -134,6 +133,8 @@ export async function estimateChange(
     runsPerDay,
     monthlyDelta: monthlyDelta(baseResult.bytes, headResult.bytes, config.pricePerTib, runsPerDay),
     ...(likelyCause !== undefined && { likelyCause }),
+    ...(fullRefreshResult !== undefined &&
+      "bytes" in fullRefreshResult && { fullRefreshBytes: fullRefreshResult.bytes }),
   };
 }
 

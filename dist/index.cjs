@@ -45819,9 +45819,10 @@ async function estimateChange(change, runner, config, newTargets = /* @__PURE__ 
   if (base === void 0 && head === void 0) {
     return { status: "skipped", ...common, reason: SKIP_REASONS[model.type] ?? "Not estimated." };
   }
-  const [baseResult, headResult] = await Promise.all([
+  const [baseResult, headResult, fullRefreshResult] = await Promise.all([
     base === void 0 ? { bytes: 0 } : runner.estimate(steadyStateSql(base), base.location),
-    head === void 0 ? { bytes: 0 } : runner.estimate(steadyStateSql(head), head.location)
+    head === void 0 ? { bytes: 0 } : runner.estimate(steadyStateSql(head), head.location),
+    head?.incrementalQuery === void 0 ? void 0 : runner.estimate(head.query, head.location)
   ]);
   if ("error" in baseResult) {
     return {
@@ -45855,7 +45856,8 @@ async function estimateChange(change, runner, config, newTargets = /* @__PURE__ 
     headBytes: headResult.bytes,
     runsPerDay,
     monthlyDelta: monthlyDelta(baseResult.bytes, headResult.bytes, config.pricePerTib, runsPerDay),
-    ...likelyCause !== void 0 && { likelyCause }
+    ...likelyCause !== void 0 && { likelyCause },
+    ...fullRefreshResult !== void 0 && "bytes" in fullRefreshResult && { fullRefreshBytes: fullRefreshResult.bytes }
   };
 }
 async function estimateChanges(changes, runner, config) {
@@ -45906,10 +45908,13 @@ function renderComment(report) {
       );
     }
     lines.push("");
-    const causes = estimated.flatMap(
-      (e2) => e2.likelyCause === void 0 ? [] : [`- \`${e2.name}\`: likely cause: ${causeText(e2.likelyCause)}.`]
-    );
-    if (causes.length > 0) lines.push(...causes, "");
+    const notes = estimated.flatMap((e2) => [
+      ...e2.likelyCause === void 0 ? [] : [`- \`${e2.name}\`: likely cause: ${causeText(e2.likelyCause)}.`],
+      ...e2.fullRefreshBytes === void 0 ? [] : [
+        `- \`${e2.name}\`: incremental, estimated from its incremental query. A full refresh would scan up to ${formatBytes(e2.fullRefreshBytes)}, not included in the monthly estimate.`
+      ]
+    ]);
+    if (notes.length > 0) lines.push(...notes, "");
   }
   if (notEstimated.length > 0) {
     lines.push("**Not estimated**", "");

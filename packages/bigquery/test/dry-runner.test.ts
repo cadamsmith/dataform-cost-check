@@ -27,14 +27,20 @@ function sentBody(call: Call | undefined): unknown {
 describe("BigQueryDryRunner", () => {
   it("returns totalBytesProcessed from a dry-run job", async () => {
     const { runner } = runnerReturning(200, { statistics: { totalBytesProcessed: "1048576" } });
-    await expect(runner.estimate("SELECT 1", "US")).resolves.toEqual({ bytes: 1048576 });
+    await expect(runner.estimate("SELECT 1", "US")).resolves.toEqual({
+      bytes: 1048576,
+      partitionedTables: [],
+    });
   });
 
   it("falls back to the query statistics", async () => {
     const { runner } = runnerReturning(200, {
       statistics: { query: { totalBytesProcessed: "42" } },
     });
-    await expect(runner.estimate("SELECT 1", "US")).resolves.toEqual({ bytes: 42 });
+    await expect(runner.estimate("SELECT 1", "US")).resolves.toEqual({
+      bytes: 42,
+      partitionedTables: [],
+    });
   });
 
   it("sends a standard-SQL dry run in the given location", async () => {
@@ -88,6 +94,71 @@ describe("BigQueryDryRunner", () => {
     const { runner } = runnerReturning(200, { statistics: {} });
     await expect(runner.estimate("SELECT 1", "US")).resolves.toEqual({
       error: "BigQuery returned no bytes-processed figure for the dry run.",
+    });
+  });
+
+  describe("partitioned tables", () => {
+    const ref = (tableId: string) => ({ projectId: "p", datasetId: "raw", tableId });
+
+    /** Dry runs read `tables`; tables.get answers from `meta` (status 404 when missing). */
+    function runnerWith(tables: object[], meta: Record<string, unknown>) {
+      const urls: string[] = [];
+      const runner = new BigQueryDryRunner({
+        projectId: "test-project",
+        getAccessToken: () => Promise.resolve("token-123"),
+        fetch: (url) => {
+          const u = url instanceof Request ? url.url : url.toString();
+          urls.push(u);
+          if (u.endsWith("/jobs")) {
+            return Promise.resolve(
+              Response.json({
+                statistics: { query: { totalBytesProcessed: "10", referencedTables: tables } },
+              }),
+            );
+          }
+          const table = /tables\/([^?]+)/.exec(u)?.[1] ?? "";
+          const body = meta[table];
+          if (body === "throw") return Promise.reject(new Error("network down"));
+          return Promise.resolve(
+            body === undefined ? new Response("", { status: 404 }) : Response.json(body),
+          );
+        },
+      });
+      return { runner, urls };
+    }
+
+    it("lists referenced tables with time or range partitioning", async () => {
+      const { runner, urls } = runnerWith([ref("events"), ref("ranges"), ref("plain")], {
+        events: { timePartitioning: { type: "DAY" } },
+        ranges: { rangePartitioning: { field: "id" } },
+        plain: {},
+      });
+      await expect(runner.estimate("SELECT 1", "US")).resolves.toEqual({
+        bytes: 10,
+        partitionedTables: ["p.raw.events", "p.raw.ranges"],
+      });
+      expect(urls).toContain(
+        "https://bigquery.googleapis.com/bigquery/v2/projects/p/datasets/raw/tables/events?fields=timePartitioning,rangePartitioning",
+      );
+    });
+
+    it("leaves out tables it cannot look up, without failing the estimate", async () => {
+      const { runner } = runnerWith([ref("events"), ref("gone"), ref("broken")], {
+        events: { timePartitioning: { type: "DAY" } },
+        broken: "throw",
+      });
+      await expect(runner.estimate("SELECT 1", "US")).resolves.toEqual({
+        bytes: 10,
+        partitionedTables: ["p.raw.events"],
+      });
+    });
+
+    it("skips wildcard tables and looks each table up once", async () => {
+      const { runner, urls } = runnerWith([ref("events"), ref("events_*")], {
+        events: { timePartitioning: { type: "DAY" } },
+      });
+      await Promise.all([runner.estimate("SELECT 1", "US"), runner.estimate("SELECT 2", "US")]);
+      expect(urls.filter((u) => u.includes("/tables/"))).toHaveLength(1);
     });
   });
 });

@@ -39,7 +39,16 @@ export type ModelChange =
     };
 
 /** What a dry run returns: bytes the query would process, or why it could not tell. */
-export type DryRunResult = { readonly bytes: number } | { readonly error: string };
+export type DryRunResult =
+  | {
+      readonly bytes: number;
+      /**
+       * Tables the query reads that are partitioned, as `project.dataset.table`. Absent
+       * when the runner cannot tell. Tables read through a view are not listed.
+       */
+      readonly partitionedTables?: readonly string[] | undefined;
+    }
+  | { readonly error: string };
 
 /**
  * The only seam to BigQuery. `packages/bigquery` implements it against the API;
@@ -51,7 +60,11 @@ export interface DryRunner {
 }
 
 /** Most likely reason for a cost jump, when a heuristic can tell. */
-export type LikelyCause = "partition-filter-removed";
+export interface LikelyCause {
+  readonly kind: "partition-filter-removed";
+  /** The partitioned table both sides read, as `project.dataset.table`. */
+  readonly table: string;
+}
 
 /** The outcome for one changed model. */
 export type Estimate =

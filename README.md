@@ -18,7 +18,7 @@ count for each, and posts one sticky comment such as:
 > | -------------- | -------- | -------------------------------- | ---------: | ---------------: |
 > | `orders_daily` | modified | 40.96 GiB → 1.24 TiB             |          1 |         +$225.00 |
 >
-> - `orders_daily`: likely cause: the partition filter was removed.
+> - `orders_daily`: likely cause: a filter on the partitioned table `proj.raw.orders` was removed.
 
 ## Who it is for
 

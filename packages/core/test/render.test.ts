@@ -20,7 +20,7 @@ const ordersDaily: Estimate = {
   headBytes: 1.24 * TIB,
   runsPerDay: 30,
   monthlyDelta: 6750,
-  likelyCause: "partition-filter-removed",
+  likelyCause: { kind: "partition-filter-removed", table: "proj.raw.orders" },
 };
 
 const customers: Estimate = {

@@ -8,9 +8,10 @@ export const COMMENT_MARKER = "<!-- dataform-cost-check -->";
 
 const UNITS = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"] as const;
 
-const CAUSE_TEXT: Record<LikelyCause, string> = {
-  "partition-filter-removed": "the partition filter was removed",
-};
+/** One kind of cause so far: a lost partition filter. */
+function causeText(cause: LikelyCause): string {
+  return `a filter on the partitioned table \`${cause.table}\` was removed`;
+}
 
 /** Render the sticky PR comment. Wording always says "estimate", never "cost". */
 export function renderComment(report: Report): string {
@@ -41,7 +42,7 @@ export function renderComment(report: Report): string {
     const causes = estimated.flatMap((e) =>
       e.likelyCause === undefined
         ? []
-        : [`- \`${e.name}\`: likely cause: ${CAUSE_TEXT[e.likelyCause]}.`],
+        : [`- \`${e.name}\`: likely cause: ${causeText(e.likelyCause)}.`],
     );
     if (causes.length > 0) lines.push(...causes, "");
   }

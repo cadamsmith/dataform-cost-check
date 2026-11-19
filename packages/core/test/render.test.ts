@@ -21,6 +21,7 @@ const ordersDaily: Estimate = {
   runsPerDay: 30,
   monthlyDelta: 6750,
   likelyCause: { kind: "partition-filter-removed", table: "proj.raw.orders" },
+  fullRefreshBytes: 3.1 * TIB,
 };
 
 const customers: Estimate = {

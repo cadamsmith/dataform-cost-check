@@ -83,7 +83,11 @@ reports "not estimated" with a reason.
 
 - **Incremental models.** The compiled output has an incremental and a full-refresh query.
   Estimate the incremental one as steady state (`core.steadyStateSql`); mention the
-  full-refresh estimate separately.
+  full-refresh estimate separately. The full-refresh query of the head version gets its own dry
+  run (`Estimate.fullRefreshBytes`), shown as a note and never added to the monthly figure.
+  If only that dry run fails, the note is left out and the estimate stands. Known gap: a
+  newly added incremental model's incremental query reads its own table, which does not
+  exist yet, so it is reported as not estimated.
 - **New upstream tables.** A dry run fails when the SQL references a table the same PR
   creates. Report it plainly as not estimated; do not guess. When a head dry run fails and
   the query quotes the target of a model the PR adds (`core.readsNewTarget`), the reason

@@ -57,9 +57,24 @@ describe("estimateChange", () => {
 
   it("uses the incremental query for incremental models", async () => {
     const m = model({ name: "inc", type: "incremental", query: "full", incrementalQuery: "incr" });
+    const runner = new FakeDryRunner([
+      ["incr", { bytes: 10 }],
+      ["full", { bytes: 5000 }],
+    ]);
+    const e = await estimateChange({ kind: "added", target: m.target, head: m }, runner, config);
+    expect(runner.calls).toEqual([
+      { sql: "incr", location: "US" },
+      { sql: "full", location: "US" },
+    ]);
+    expect(e).toMatchObject({ status: "estimated", headBytes: 10, fullRefreshBytes: 5000 });
+  });
+
+  it("keeps the estimate when only the full-refresh dry run fails", async () => {
+    const m = model({ name: "inc", type: "incremental", query: "full", incrementalQuery: "incr" });
     const runner = new FakeDryRunner([["incr", { bytes: 10 }]]);
-    await estimateChange({ kind: "added", target: m.target, head: m }, runner, config);
-    expect(runner.calls).toEqual([{ sql: "incr", location: "US" }]);
+    const e = await estimateChange({ kind: "added", target: m.target, head: m }, runner, config);
+    expect(e).toMatchObject({ status: "estimated", headBytes: 10 });
+    expect(e).not.toHaveProperty("fullRefreshBytes");
   });
 
   it("passes no location to the runner when the model has none", async () => {

@@ -82,6 +82,12 @@ export type Estimate =
       /** Head minus base, in USD per month. An upper-bound estimate. */
       readonly monthlyDelta: number;
       readonly likelyCause?: LikelyCause;
+      /**
+       * Incremental models only: bytes a full refresh of the head version would process.
+       * Reported beside the estimate, never added to `monthlyDelta`. Absent when that dry
+       * run failed.
+       */
+      readonly fullRefreshBytes?: number;
     }
   | {
       /** Deliberately not estimated, e.g. views or assertions. */

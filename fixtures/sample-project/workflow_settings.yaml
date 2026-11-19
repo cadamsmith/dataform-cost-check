@@ -1,0 +1,5 @@
+defaultProject: driftline-sample
+defaultLocation: US
+defaultDataset: analytics
+defaultAssertionDataset: analytics_assertions
+dataformCoreVersion: 3.0.0

@@ -1,0 +1,9 @@
+node_modules/
+coverage/
+*.log
+.DS_Store
+.env
+.env.*
+# Dataform CLI output inside fixtures
+fixtures/**/.df-credentials.json
+# The root dist/ is the committed Action bundle: do not ignore it.

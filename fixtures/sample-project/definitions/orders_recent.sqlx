@@ -1,0 +1,8 @@
+config {
+  type: "view",
+  description: "Orders from the last 7 days. Creating it scans nothing; readers pay."
+}
+
+SELECT *
+FROM ${ref("orders")}
+WHERE order_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 7 DAY)

@@ -1,0 +1,17 @@
+config {
+  type: "incremental",
+  description: "Daily order totals. The incremental query reads only new partitions.",
+  tags: ["hourly"],
+  uniqueKey: ["order_date"],
+  bigquery: {
+    partitionBy: "order_date"
+  }
+}
+
+SELECT
+  order_date,
+  COUNT(*) AS orders,
+  SUM(amount) AS revenue
+FROM ${ref("orders")}
+${when(incremental(), `WHERE order_date >= (SELECT MAX(order_date) FROM ${self()})`)}
+GROUP BY order_date

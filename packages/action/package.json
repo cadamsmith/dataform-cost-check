@@ -10,7 +10,9 @@
   },
   "dependencies": {
     "@actions/core": "^3.0.1",
+    "@dataform-cost-check/bigquery": "workspace:*",
     "@dataform-cost-check/core": "workspace:*",
+    "@dataform-cost-check/dataform": "workspace:*",
     "yaml": "^2.9.1"
   },
   "scripts": {

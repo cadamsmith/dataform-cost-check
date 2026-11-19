@@ -1,8 +1,8 @@
 # Dataform Cost Check
 
-> **Status: pre-alpha.** The repository is scaffolded and the pricing and comment logic
-> is tested. The action does not yet compile Dataform projects or call BigQuery, so it
-> reports "no models changed" on every run. Do not install it on real projects yet.
+> **Status: pre-alpha.** The action compiles the Dataform project at base and head and
+> dry-runs changed models in BigQuery, but it writes the estimate to the job summary
+> instead of posting a pull request comment. Do not install it on real projects yet.
 
 A GitHub Action that posts a BigQuery cost estimate on every pull request in a
 [Dataform](https://cloud.google.com/dataform) project: a price tag on every data change,
@@ -54,6 +54,7 @@ jobs:
         with:
           fetch-depth: 0
       # Authenticate to Google Cloud here (Workload Identity Federation).
+      - run: npm install -g @dataform/cli
       - uses: cadamsmith/dataform-cost-check@v1
         with:
           config-path: dataform-cost-check.yml
@@ -62,6 +63,8 @@ jobs:
 | Input          | Default                     | Description                           |
 | -------------- | --------------------------- | ------------------------------------- |
 | `config-path`  | `dataform-cost-check.yml`   | Path to the config file               |
+| `project-dir`  | `.`                         | Directory of the Dataform project     |
+| `project-id`   | the authenticated project   | Google Cloud project for dry runs     |
 | `base-ref`     | the pull request's base SHA | Commit to compare against             |
 | `github-token` | `${{ github.token }}`       | Token used to post the sticky comment |
 

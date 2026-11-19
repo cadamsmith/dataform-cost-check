@@ -208,9 +208,15 @@ importers:
       '@actions/core':
         specifier: ^3.0.1
         version: 3.0.1
+      '@dataform-cost-check/bigquery':
+        specifier: workspace:*
+        version: link:../bigquery
       '@dataform-cost-check/core':
         specifier: workspace:*
         version: link:../core
+      '@dataform-cost-check/dataform':
+        specifier: workspace:*
+        version: link:../dataform
       yaml:
         specifier: ^2.9.1
         version: 2.9.1

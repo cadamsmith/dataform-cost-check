@@ -86,6 +86,13 @@ reports "not estimated" with a reason.
   full-refresh estimate separately.
 - **New upstream tables.** A dry run fails when the SQL references a table the same PR
   creates. Report it plainly as not estimated; do not guess.
+- **Every dry run fails.** The check fails when every changed model that needed a dry run
+  came back not estimated, and quotes the first error (`action.dryRunFailure`). That
+  pattern usually means a misconfigured project (no `bigquery.jobs.create`, the API
+  disabled, a wrong project ID), and passing green would hide it. Known false failure: a
+  PR whose only estimable change reads a table the same PR creates. Revisit with the new
+  upstream tables work, for example by leaving those failures out of the count, or by
+  warning instead of failing. Chosen in #13.
 - **Views.** Creating a view costs nothing; the cost lands on whatever reads it. Views are
   skipped with that reason.
 - **Assertions, operations, pre/post operations.** Decide per type: estimate, skip, or

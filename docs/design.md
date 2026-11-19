@@ -106,8 +106,11 @@ reports "not estimated" with a reason.
   skipped with that reason.
 - **Assertions, operations, pre/post operations.** Decide per type: estimate, skip, or
   label. v1 skips assertions and operations with a reason.
-- **Regions.** On-demand price varies by location. The price is configurable first;
-  region-aware pricing comes later. Each model carries its BigQuery location.
+- **Regions.** On-demand price varies by location. The price is configurable first:
+  `price_per_tib_by_location` overrides `price_per_tib` for a model whose location
+  matches, without regard to case (`core.pricePerTibFor`), and the comment lists the
+  overrides. A model with no location uses `price_per_tib`. Built-in region-aware prices
+  come later. Each model carries its BigQuery location.
   Dataform 3 has no location per action, so a project has one location:
   `defaultLocation` in `workflow_settings.yaml`. That setting is optional. When it is
   missing, models carry no location and the dry run sends none, so BigQuery picks the

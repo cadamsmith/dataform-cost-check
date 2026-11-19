@@ -7,7 +7,13 @@ export function parseConfig(text: string): Config {
   const raw: unknown = parse(text) ?? {};
   if (!isRecord(raw)) throw new ConfigError("the config must be a YAML mapping");
 
-  const known = new Set(["price_per_tib", "limit_monthly", "default_runs_per_day", "runs_per_day"]);
+  const known = new Set([
+    "price_per_tib",
+    "price_per_tib_by_location",
+    "limit_monthly",
+    "default_runs_per_day",
+    "runs_per_day",
+  ]);
   for (const key of Object.keys(raw)) {
     if (!known.has(key)) throw new ConfigError(`unknown key "${key}"`);
   }
@@ -19,8 +25,21 @@ export function parseConfig(text: string): Config {
     runsPerDay[name] = nonNegative(`runs_per_day.${name}`, value);
   }
 
+  const rawPrices = raw.price_per_tib_by_location;
+  let pricePerTibByLocation: Record<string, number> | undefined;
+  if (rawPrices !== undefined && rawPrices !== null) {
+    if (!isRecord(rawPrices)) {
+      throw new ConfigError("price_per_tib_by_location must be a mapping of location to number");
+    }
+    pricePerTibByLocation = {};
+    for (const [location, value] of Object.entries(rawPrices)) {
+      pricePerTibByLocation[location] = nonNegative(`price_per_tib_by_location.${location}`, value);
+    }
+  }
+
   return {
     pricePerTib: optional("price_per_tib", raw.price_per_tib, DEFAULT_CONFIG.pricePerTib),
+    ...(pricePerTibByLocation !== undefined && { pricePerTibByLocation }),
     limitMonthly:
       raw.limit_monthly === undefined || raw.limit_monthly === null
         ? DEFAULT_CONFIG.limitMonthly

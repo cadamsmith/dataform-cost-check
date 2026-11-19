@@ -80,8 +80,15 @@ function headline(report: Report): string {
 }
 
 function footer(report: Report): string {
+  const byLocation = Object.entries(report.pricePerTibByLocation ?? {}).map(
+    ([location, price]) => `${formatUsd(price)} in ${location}`,
+  );
+  const price =
+    byLocation.length === 0
+      ? `${formatUsd(report.pricePerTib)} per TiB on-demand`
+      : `${formatUsd(report.pricePerTib)} per TiB on-demand (${byLocation.join(", ")})`;
   return [
-    `<sub>Estimates are upper bounds from BigQuery dry runs, priced at ${formatUsd(report.pricePerTib)} per TiB on-demand, `,
+    `<sub>Estimates are upper bounds from BigQuery dry runs, priced at ${price}, `,
     "with no free-tier deduction. If this project uses slot-based (Editions) pricing, bytes scanned ",
     "do not map to dollars and these figures do not apply.</sub>",
   ].join("");

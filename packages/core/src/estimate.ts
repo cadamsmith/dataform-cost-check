@@ -1,4 +1,4 @@
-import { exceedsLimit, monthlyDelta, runsPerDayFor } from "./pricing.ts";
+import { exceedsLimit, monthlyDelta, pricePerTibFor, runsPerDayFor } from "./pricing.ts";
 import type {
   Config,
   DryRunResult,
@@ -131,7 +131,12 @@ export async function estimateChange(
     baseBytes: baseResult.bytes,
     headBytes: headResult.bytes,
     runsPerDay,
-    monthlyDelta: monthlyDelta(baseResult.bytes, headResult.bytes, config.pricePerTib, runsPerDay),
+    monthlyDelta: monthlyDelta(
+      baseResult.bytes,
+      headResult.bytes,
+      pricePerTibFor(model, config),
+      runsPerDay,
+    ),
     ...(likelyCause !== undefined && { likelyCause }),
     ...(fullRefreshResult !== undefined &&
       "bytes" in fullRefreshResult && { fullRefreshBytes: fullRefreshResult.bytes }),
@@ -161,6 +166,9 @@ export function buildReport(estimates: readonly Estimate[], config: Config): Rep
     estimates,
     totalMonthlyDelta,
     pricePerTib: config.pricePerTib,
+    ...(config.pricePerTibByLocation !== undefined && {
+      pricePerTibByLocation: config.pricePerTibByLocation,
+    }),
     limitMonthly: config.limitMonthly,
     overLimit: exceedsLimit(totalMonthlyDelta, config.limitMonthly),
   };

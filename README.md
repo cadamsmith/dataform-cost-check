@@ -72,6 +72,8 @@ Configuration, in `dataform-cost-check.yml` (see [`dataform-cost-check.example.y
 
 ```yaml
 price_per_tib: 6.25 # USD, on-demand
+price_per_tib_by_location: # optional, by BigQuery location (matches defaultLocation)
+  asia-northeast1: 7.50
 limit_monthly: 100 # fail the check above this
 default_runs_per_day: 1
 runs_per_day: # overrides by Dataform tag or model name

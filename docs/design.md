@@ -1,7 +1,7 @@
 # Design
 
-Working name: **Driftline Check**. This document records the decisions behind the free
-Action, its scope, how the check works, and the hard cases it must handle.
+This document records the decisions behind **Dataform Cost Check**, the free Action:
+its scope, how the check works, and the hard cases it must handle.
 
 ## Audience and prior art
 
@@ -37,7 +37,7 @@ Action, its scope, how the check works, and the hard cases it must handle.
 - One configurable spending limit that can fail the check
 - Last refresh duration per table, as history, when permissions allow
 
-### Paid "Driftline Team" (not in this repository; do not build here)
+### Paid tier, working name "Driftline Team" (not in this repository; do not build here)
 
 - Cost history across PRs; budgets per team or dataset with approval rules
 - Slack alerts and a monthly finance summary
@@ -73,7 +73,7 @@ Action, its scope, how the check works, and the hard cases it must handle.
   `DryRunner`). No I/O.
 - `dataform`: compiles a project and maps the JSON output to `Model[]`.
 - `bigquery`: the only package that touches the network.
-- `action`: reads inputs and `driftline.yml`, wires the pieces, posts the comment, sets
+- `action`: reads inputs and `dataform-cost-check.yml`, wires the pieces, posts the comment, sets
   the exit code.
 
 ## Hard cases

@@ -1,4 +1,4 @@
-# Driftline Check
+# Dataform Cost Check
 
 > **Status: pre-alpha.** The repository is scaffolded and the pricing and comment logic
 > is tested. The action does not yet compile Dataform projects or call BigQuery, so it
@@ -39,7 +39,7 @@ third-party service, and no one else holds your credentials.
 ## Usage (once released)
 
 ```yaml
-# .github/workflows/driftline.yml
+# .github/workflows/cost-check.yml
 on: pull_request # never pull_request_target
 
 jobs:
@@ -56,16 +56,16 @@ jobs:
       # Authenticate to Google Cloud here (Workload Identity Federation).
       - uses: cadamsmith/dataform-cost-check@v1
         with:
-          config-path: driftline.yml
+          config-path: dataform-cost-check.yml
 ```
 
 | Input          | Default                     | Description                           |
 | -------------- | --------------------------- | ------------------------------------- |
-| `config-path`  | `driftline.yml`             | Path to the config file               |
+| `config-path`  | `dataform-cost-check.yml`   | Path to the config file               |
 | `base-ref`     | the pull request's base SHA | Commit to compare against             |
 | `github-token` | `${{ github.token }}`       | Token used to post the sticky comment |
 
-Configuration, in `driftline.yml` (see [`driftline.example.yml`](driftline.example.yml)):
+Configuration, in `dataform-cost-check.yml` (see [`dataform-cost-check.example.yml`](dataform-cost-check.example.yml)):
 
 ```yaml
 price_per_tib: 6.25 # USD, on-demand

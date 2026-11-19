@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Driftline Check: a GitHub Action that posts BigQuery cost estimates on Dataform PRs.
+Dataform Cost Check: a GitHub Action that posts BigQuery cost estimates on Dataform PRs.
 Pre-alpha. See `README.md`, `CONTRIBUTING.md` and `docs/design.md`.
 
 ## Product scope (read before adding features)
@@ -10,7 +10,7 @@ Pre-alpha. See `README.md`, `CONTRIBUTING.md` and `docs/design.md`.
   comes up.
 - Build only what is in **v1 scope** in `docs/design.md`, or what an open milestone issue
   asks for.
-- Do **not** start anything from the paid "Driftline Team" list, "later widening" (any
+- Do **not** start anything from the paid tier list, "later widening" (any
   BigQuery SQL, dbt, GitLab), or the out-of-scope list (Snowflake, Databricks, monitoring,
   automatic fixes, wall-clock forecasts). If a task drifts there, stop and say so. The
   maintainer decides, and records the decision in the strategy doc first.

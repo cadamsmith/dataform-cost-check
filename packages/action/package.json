@@ -1,5 +1,5 @@
 {
-  "name": "@driftline/action",
+  "name": "@dataform-cost-check/action",
   "version": "0.0.0",
   "private": true,
   "description": "GitHub Action entry point.",
@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@actions/core": "^3.0.1",
-    "@driftline/core": "workspace:*",
+    "@dataform-cost-check/core": "workspace:*",
     "yaml": "^2.9.1"
   },
   "scripts": {

@@ -1,4 +1,4 @@
-import { DEFAULT_CONFIG } from "@driftline/core";
+import { DEFAULT_CONFIG } from "@dataform-cost-check/core";
 import { describe, expect, it } from "vitest";
 import { ConfigError, parseConfig } from "../src/config.ts";
 

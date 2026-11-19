@@ -1,4 +1,4 @@
-name: Driftline Check
+name: Dataform Cost Check
 description: Post a BigQuery cost estimate on every Dataform pull request.
 author: cadamsmith
 branding:
@@ -6,9 +6,9 @@ branding:
   color: blue
 inputs:
   config-path:
-    description: Path to the Driftline config file, relative to the repository root.
+    description: Path to the config file, relative to the repository root.
     required: false
-    default: driftline.yml
+    default: dataform-cost-check.yml
   base-ref:
     description: Commit to compare against. Defaults to the pull request's base commit.
     required: false

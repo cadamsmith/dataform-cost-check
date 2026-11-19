@@ -1,5 +1,5 @@
 {
-  "name": "@driftline/bigquery",
+  "name": "@dataform-cost-check/bigquery",
   "version": "0.0.0",
   "private": true,
   "description": "DryRunner implementation against the BigQuery API.",
@@ -9,6 +9,6 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@driftline/core": "workspace:*"
+    "@dataform-cost-check/core": "workspace:*"
   }
 }

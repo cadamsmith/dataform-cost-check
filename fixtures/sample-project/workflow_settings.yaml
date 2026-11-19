@@ -1,4 +1,4 @@
-defaultProject: driftline-sample
+defaultProject: cost-check-sample
 defaultLocation: US
 defaultDataset: analytics
 defaultAssertionDataset: analytics_assertions

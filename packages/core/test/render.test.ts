@@ -103,7 +103,9 @@ describe("renderComment", () => {
     const body = renderComment(report({ estimates: [ordersDaily], totalMonthlyDelta: 6750 }));
     expect(body.startsWith(COMMENT_MARKER)).toBe(true);
     expect(body).toContain("estimate");
-    expect(body).not.toMatch(/\bcosts?\b/i);
+    // The product name contains "cost"; the rule is about how the figures are described.
+    const afterTitle = body.split("\n").slice(2).join("\n");
+    expect(afterTitle).not.toMatch(/\bcosts?\b/i);
     expect(body).toContain("slot-based (Editions) pricing");
   });
 });

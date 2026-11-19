@@ -1,8 +1,8 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
 exports[`renderComment > renders a pull request with no model changes 1`] = `
-"<!-- driftline-check -->
-### Driftline Check: BigQuery estimate
+"<!-- dataform-cost-check -->
+### Dataform Cost Check: BigQuery estimate
 
 No models changed in this pull request, so there is nothing to estimate.
 
@@ -11,8 +11,8 @@ No models changed in this pull request, so there is nothing to estimate.
 `;
 
 exports[`renderComment > renders a saving within the limit 1`] = `
-"<!-- driftline-check -->
-### Driftline Check: BigQuery estimate
+"<!-- dataform-cost-check -->
+### Dataform Cost Check: BigQuery estimate
 
 This change saves an estimated **$0.92 / month**. Within the $100.00 limit.
 
@@ -25,8 +25,8 @@ This change saves an estimated **$0.92 / month**. Within the $100.00 limit.
 `;
 
 exports[`renderComment > renders an increase over the limit with every kind of row 1`] = `
-"<!-- driftline-check -->
-### Driftline Check: BigQuery estimate
+"<!-- dataform-cost-check -->
+### Dataform Cost Check: BigQuery estimate
 
 This change adds an estimated **+$6,750.92 / month**. :x: Over the $100.00 limit.
 
@@ -47,8 +47,8 @@ This change adds an estimated **+$6,750.92 / month**. :x: Over the $100.00 limit
 `;
 
 exports[`renderComment > renders when nothing could be estimated 1`] = `
-"<!-- driftline-check -->
-### Driftline Check: BigQuery estimate
+"<!-- dataform-cost-check -->
+### Dataform Cost Check: BigQuery estimate
 
 None of the changed models were estimated.
 

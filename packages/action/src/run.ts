@@ -1,5 +1,5 @@
-import { diffModels, estimateChanges, renderComment } from "@driftline/core";
-import type { Config, DryRunner, Model, Report } from "@driftline/core";
+import { diffModels, estimateChanges, renderComment } from "@dataform-cost-check/core";
+import type { Config, DryRunner, Model, Report } from "@dataform-cost-check/core";
 
 export interface RunDeps {
   readonly config: Config;

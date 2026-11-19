@@ -1,0 +1,6 @@
+# Copy to driftline.yml in your Dataform repository.
+price_per_tib: 6.25 # USD, on-demand. Check the current price for your region.
+limit_monthly: 100 # Fail the check above this many USD per month. Omit for no limit.
+default_runs_per_day: 1
+runs_per_day: # Overrides by Dataform tag or model name.
+  hourly: 24

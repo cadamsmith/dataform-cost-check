@@ -1,0 +1,27 @@
+name: Driftline Check
+description: Post a BigQuery cost estimate on every Dataform pull request.
+author: cadamsmith
+branding:
+  icon: dollar-sign
+  color: blue
+inputs:
+  config-path:
+    description: Path to the Driftline config file, relative to the repository root.
+    required: false
+    default: driftline.yml
+  base-ref:
+    description: Commit to compare against. Defaults to the pull request's base commit.
+    required: false
+    default: ""
+  github-token:
+    description: Token used to post the sticky pull request comment.
+    required: false
+    default: ${{ github.token }}
+outputs:
+  monthly-delta:
+    description: Estimated change in monthly spend, in USD (negative for savings).
+  over-limit:
+    description: "'true' when the estimate exceeds the configured limit."
+runs:
+  using: node24
+  main: dist/index.cjs

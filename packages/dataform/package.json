@@ -1,0 +1,14 @@
+{
+  "name": "@driftline/dataform",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Adapter: run and parse `dataform compile --json` into core models.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@driftline/core": "workspace:*"
+  }
+}

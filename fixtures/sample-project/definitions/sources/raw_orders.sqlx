@@ -1,0 +1,7 @@
+config {
+  type: "declaration",
+  database: "driftline-sample",
+  schema: "raw",
+  name: "orders",
+  description: "Raw orders landed by ingestion. Partitioned by order_date."
+}

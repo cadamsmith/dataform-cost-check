@@ -33129,7 +33129,7 @@ var require_getCredentials = __commonJS({
     var fs4 = require("fs");
     var util_1 = require("util");
     var errorWithCode_1 = require_errorWithCode();
-    var readFile2 = fs4.readFile ? (0, util_1.promisify)(fs4.readFile) : async () => {
+    var readFile3 = fs4.readFile ? (0, util_1.promisify)(fs4.readFile) : async () => {
       throw new errorWithCode_1.ErrorWithCode("use key rather than keyFile.", "MISSING_CREDENTIALS");
     };
     var ExtensionFiles;
@@ -33151,7 +33151,7 @@ var require_getCredentials = __commonJS({
        * @returns A promise that resolves with the credentials.
        */
       async getCredentials() {
-        const key = await readFile2(this.keyFilePath, "utf8");
+        const key = await readFile3(this.keyFilePath, "utf8");
         let body;
         try {
           body = JSON.parse(key);
@@ -33177,7 +33177,7 @@ var require_getCredentials = __commonJS({
        * @returns A promise that resolves with the private key.
        */
       async getCredentials() {
-        const privateKey = await readFile2(this.keyFilePath, "utf8");
+        const privateKey = await readFile3(this.keyFilePath, "utf8");
         return { privateKey };
       }
     };
@@ -34810,7 +34810,7 @@ var require_filesubjecttokensupplier = __commonJS({
     exports2.FileSubjectTokenSupplier = void 0;
     var util_1 = require("util");
     var fs4 = require("fs");
-    var readFile2 = (0, util_1.promisify)(fs4.readFile ?? (() => {
+    var readFile3 = (0, util_1.promisify)(fs4.readFile ?? (() => {
     }));
     var realpath = (0, util_1.promisify)(fs4.realpath ?? (() => {
     }));
@@ -34850,7 +34850,7 @@ var require_filesubjecttokensupplier = __commonJS({
           throw err;
         }
         let subjectToken;
-        const rawText = await readFile2(parsedFilePath, { encoding: "utf8" });
+        const rawText = await readFile3(parsedFilePath, { encoding: "utf8" });
         if (this.formatType === "text") {
           subjectToken = rawText;
         } else if (this.formatType === "json" && this.subjectTokenFieldName) {
@@ -39436,12 +39436,12 @@ var require_log = __commonJS({
       if (logLevel === "debug")
         console.log(...messages);
     }
-    function warn(logLevel, warning) {
+    function warn(logLevel, warning2) {
       if (logLevel === "debug" || logLevel === "warn") {
         if (typeof node_process.emitWarning === "function")
-          node_process.emitWarning(warning);
+          node_process.emitWarning(warning2);
         else
-          console.warn(warning);
+          console.warn(warning2);
       }
     }
     exports2.debug = debug2;
@@ -42911,9 +42911,9 @@ var require_composer = __commonJS({
         this.prelude = [];
         this.errors = [];
         this.warnings = [];
-        this.onError = (source, code, message, warning) => {
+        this.onError = (source, code, message, warning2) => {
           const pos = getErrorPos(source);
-          if (warning)
+          if (warning2)
             this.warnings.push(new errors.YAMLWarning(pos, code, message));
           else
             this.errors.push(new errors.YAMLParseError(pos, code, message));
@@ -42986,10 +42986,10 @@ ${cb}` : comment;
           console.dir(token, { depth: null });
         switch (token.type) {
           case "directive":
-            this.directives.add(token.source, (offset, message, warning) => {
+            this.directives.add(token.source, (offset, message, warning2) => {
               const pos = getErrorPos(token);
               pos[0] += offset;
-              this.onError(pos, "BAD_DIRECTIVE", message, warning);
+              this.onError(pos, "BAD_DIRECTIVE", message, warning2);
             });
             this.prelude.push(token.source);
             this.atDirectives = true;
@@ -45031,7 +45031,7 @@ var require_public_api = __commonJS({
       const doc = parseDocument(src, options);
       if (!doc)
         return null;
-      doc.warnings.forEach((warning) => log.warn(doc.options.logLevel, warning));
+      doc.warnings.forEach((warning2) => log.warn(doc.options.logLevel, warning2));
       if (doc.errors.length > 0) {
         if (doc.options.logLevel !== "silent")
           throw doc.errors[0];
@@ -45614,6 +45614,12 @@ function setFailed(message) {
 function error(message, properties = {}) {
   issueCommand("error", toCommandProperties(properties), message instanceof Error ? message.toString() : message);
 }
+function warning(message, properties = {}) {
+  issueCommand("warning", toCommandProperties(properties), message instanceof Error ? message.toString() : message);
+}
+function notice(message, properties = {}) {
+  issueCommand("notice", toCommandProperties(properties), message instanceof Error ? message.toString() : message);
+}
 function info(message) {
   process.stdout.write(message + os4.EOL);
 }
@@ -46092,6 +46098,69 @@ function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+// src/pr-comment.ts
+var import_promises2 = require("node:fs/promises");
+function pullRequestFromEvent(event) {
+  const pr = event?.pull_request;
+  const repo = pr?.base?.repo?.full_name;
+  if (pr?.number === void 0 || repo === void 0) return void 0;
+  const headRepo = pr.head?.repo?.full_name;
+  return { repo, number: pr.number, isFork: headRepo !== repo };
+}
+async function readPullRequestContext(eventPath) {
+  if (!eventPath) return void 0;
+  return pullRequestFromEvent(JSON.parse(await (0, import_promises2.readFile)(eventPath, "utf8")));
+}
+function findStickyComment(comments, marker) {
+  const ours = comments.filter((c) => c.body?.startsWith(marker) === true);
+  return ours.find((c) => c.user?.type === "Bot") ?? ours[0];
+}
+async function upsertStickyComment(options) {
+  const { token, pr, body, marker } = options;
+  const apiUrl = options.apiUrl ?? "https://api.github.com";
+  const doFetch = options.fetch ?? fetch;
+  const request = async (method, path, payload) => {
+    const response = await doFetch(`${apiUrl}${path}`, {
+      method,
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${token}`,
+        "X-GitHub-Api-Version": "2022-11-28",
+        ...payload === void 0 ? {} : { "Content-Type": "application/json" }
+      },
+      ...payload === void 0 ? {} : { body: JSON.stringify(payload) }
+    });
+    if (!response.ok) {
+      throw new Error(`GitHub API ${method} ${path} returned ${String(response.status)}`);
+    }
+    return response.json();
+  };
+  const comments = [];
+  for (let page = 1; ; page++) {
+    const batch = await request(
+      "GET",
+      `/repos/${pr.repo}/issues/${String(pr.number)}/comments?per_page=100&page=${String(page)}`
+    );
+    comments.push(...batch);
+    if (batch.length < 100) break;
+  }
+  const existing = findStickyComment(comments, marker);
+  if (existing) {
+    const updated = await request(
+      "PATCH",
+      `/repos/${pr.repo}/issues/comments/${String(existing.id)}`,
+      {
+        body
+      }
+    );
+    return { action: "updated", url: updated.html_url };
+  }
+  const created = await request("POST", `/repos/${pr.repo}/issues/${String(pr.number)}/comments`, {
+    body
+  });
+  return { action: "created", url: created.html_url };
+}
+
 // src/run.ts
 async function runCheck(deps) {
   const [base, head] = await Promise.all([deps.loadModels("base"), deps.loadModels("head")]);
@@ -46109,6 +46178,13 @@ function dryRunFailure(report) {
 // src/main.ts
 var MAX_CONCURRENT_DRY_RUNS = 4;
 async function main() {
+  const pr = await readPullRequestContext(process.env.GITHUB_EVENT_PATH);
+  if (pr?.isFork) {
+    const note = "Dataform Cost Check: no report for pull requests from forks, which get no secrets.";
+    notice(note);
+    await summary.addRaw(note).write();
+    return;
+  }
   const configPath = getInput("config-path") || "dataform-cost-check.yml";
   const projectDir = getInput("project-dir") || ".";
   const projectId = getInput("project-id") || process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || process.env.CLOUDSDK_CORE_PROJECT;
@@ -46136,11 +46212,34 @@ async function main() {
   await summary.addRaw(comment).write();
   setOutput("monthly-delta", report.totalMonthlyDelta.toFixed(2));
   setOutput("over-limit", String(report.overLimit));
+  await postComment(pr, comment);
   const failure = dryRunFailure(report);
   if (failure !== void 0) {
     setFailed(failure);
   } else if (report.overLimit) {
     setFailed("Estimated monthly spend change is over the configured limit.");
+  }
+}
+async function postComment(pr, body) {
+  const token = getInput("github-token");
+  if (pr === void 0 || !token) {
+    info("Not a pull request run, or no github-token: report is in the job summary only.");
+    return;
+  }
+  try {
+    const { action, url } = await upsertStickyComment({
+      token,
+      pr,
+      body,
+      marker: COMMENT_MARKER,
+      apiUrl: process.env.GITHUB_API_URL
+    });
+    info(`Comment ${action}: ${url}`);
+  } catch (error2) {
+    const detail = error2 instanceof Error ? error2.message : String(error2);
+    warning(
+      `Could not post the pull request comment (does the job have pull-requests: write?). ${detail}`
+    );
   }
 }
 main().catch((error2) => {

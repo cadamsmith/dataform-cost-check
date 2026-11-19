@@ -5,18 +5,22 @@
 # Needs: the Dataform CLI (npm install -g @dataform/cli), Application Default
 # Credentials (gcloud auth application-default login), and a built dist/ (pnpm build).
 #
-# Usage: examples/bitcoin-demo/run.sh [--project ID] [--limit USD]
+# Usage: examples/bitcoin-demo/run.sh [--project ID] [--limit USD] [--pr NUMBER]
 #   --project  Google Cloud project to run dry runs in (default: gcloud's current project)
 #   --limit    limit_monthly for this run (default: 100)
+#   --pr       also post (or update) the sticky comment on this pull request of the
+#              repository this script lives in, using your gh CLI login
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
 project="$(gcloud config get-value project 2>/dev/null || true)"
 limit=100
+pr=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --project) project="$2"; shift 2 ;;
     --limit) limit="$2"; shift 2 ;;
+    --pr) pr="$2"; shift 2 ;;
     *) echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -79,8 +83,16 @@ echo
 echo "== Dataform Cost Check"
 : > outputs.txt
 : > summary.md
+pr_env=()
+if [[ -n "$pr" ]]; then
+  repo="$(cd "$repo_root" && gh repo view --json nameWithOwner -q .nameWithOwner)"
+  cat > event.json <<JSON
+{"pull_request": {"number": $pr, "base": {"repo": {"full_name": "$repo"}}, "head": {"repo": {"full_name": "$repo"}}}}
+JSON
+  pr_env=(GITHUB_EVENT_PATH="$demo/event.json" "INPUT_GITHUB-TOKEN=$(gh auth token)")
+fi
 status=0
-env "INPUT_BASE-REF=$(git rev-parse HEAD~1)" "INPUT_PROJECT-ID=$project" \
+env ${pr_env[@]+"${pr_env[@]}"} "INPUT_BASE-REF=$(git rev-parse HEAD~1)" "INPUT_PROJECT-ID=$project" \
   GITHUB_OUTPUT="$demo/outputs.txt" GITHUB_STEP_SUMMARY="$demo/summary.md" \
   node "$repo_root/dist/index.cjs" || status=$?
 echo

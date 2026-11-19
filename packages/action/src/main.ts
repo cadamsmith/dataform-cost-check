@@ -2,11 +2,12 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import * as core from "@actions/core";
 import { BigQueryDryRunner } from "@dataform-cost-check/bigquery";
-import { DEFAULT_CONFIG, limitConcurrency } from "@dataform-cost-check/core";
+import { COMMENT_MARKER, DEFAULT_CONFIG, limitConcurrency } from "@dataform-cost-check/core";
 import type { Model } from "@dataform-cost-check/core";
 import { loadModels } from "@dataform-cost-check/dataform";
 import { resolveBaseRef, withBaseWorktree } from "./base-checkout.ts";
 import { parseConfig } from "./config.ts";
+import { readPullRequestContext, upsertStickyComment } from "./pr-comment.ts";
 import { dryRunFailure, runCheck } from "./run.ts";
 
 /** Dry runs in flight at once, to stay under BigQuery's rate limits on large PRs. */
@@ -14,12 +15,21 @@ const MAX_CONCURRENT_DRY_RUNS = 4;
 
 /**
  * Action entry point: compile the Dataform project at base and head, dry-run the changed
- * models in the user's own BigQuery project, and report the estimate.
- *
- * TODO(milestone 1): post or update the sticky comment with github-token (skip quietly on
- * fork PRs, where secrets are unavailable). For now the comment goes to the job summary.
+ * models in the user's own BigQuery project, and report the estimate in the job summary
+ * and as a sticky pull request comment.
  */
 async function main(): Promise<void> {
+  // Fork pull requests get no secrets and a read-only token. Report nothing and pass,
+  // before anything that needs Google Cloud credentials can fail.
+  const pr = await readPullRequestContext(process.env.GITHUB_EVENT_PATH);
+  if (pr?.isFork) {
+    const note =
+      "Dataform Cost Check: no report for pull requests from forks, which get no secrets.";
+    core.notice(note);
+    await core.summary.addRaw(note).write();
+    return;
+  }
+
   const configPath = core.getInput("config-path") || "dataform-cost-check.yml";
   const projectDir = core.getInput("project-dir") || ".";
   const projectId =
@@ -58,12 +68,40 @@ async function main(): Promise<void> {
   await core.summary.addRaw(comment).write();
   core.setOutput("monthly-delta", report.totalMonthlyDelta.toFixed(2));
   core.setOutput("over-limit", String(report.overLimit));
+  await postComment(pr, comment);
 
   const failure = dryRunFailure(report);
   if (failure !== undefined) {
     core.setFailed(failure);
   } else if (report.overLimit) {
     core.setFailed("Estimated monthly spend change is over the configured limit.");
+  }
+}
+
+/** Posts or updates the sticky comment. Never fails the check: the summary has the report. */
+async function postComment(
+  pr: Awaited<ReturnType<typeof readPullRequestContext>>,
+  body: string,
+): Promise<void> {
+  const token = core.getInput("github-token");
+  if (pr === undefined || !token) {
+    core.info("Not a pull request run, or no github-token: report is in the job summary only.");
+    return;
+  }
+  try {
+    const { action, url } = await upsertStickyComment({
+      token,
+      pr,
+      body,
+      marker: COMMENT_MARKER,
+      apiUrl: process.env.GITHUB_API_URL,
+    });
+    core.info(`Comment ${action}: ${url}`);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    core.warning(
+      `Could not post the pull request comment (does the job have pull-requests: write?). ${detail}`,
+    );
   }
 }
 

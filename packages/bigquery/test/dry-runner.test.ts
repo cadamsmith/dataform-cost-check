@@ -74,6 +74,11 @@ describe("BigQueryDryRunner", () => {
     await expect(runner.estimate("SELECT 1", "US")).rejects.toThrow(/Invalid credentials/);
   });
 
+  it("throws when rate limited", async () => {
+    const { runner } = runnerReturning(429, { error: { message: "Too many requests" } });
+    await expect(runner.estimate("SELECT 1", "US")).rejects.toThrow(/Too many requests/);
+  });
+
   it("throws when BigQuery is unavailable", async () => {
     const { runner } = runnerReturning(503, {});
     await expect(runner.estimate("SELECT 1", "US")).rejects.toThrow(/HTTP 503/);

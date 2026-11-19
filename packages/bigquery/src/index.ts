@@ -41,8 +41,8 @@ function applicationDefaultToken(): () => Promise<string> {
  *
  * Errors about one query (a missing table, a syntax error, no access to a table) become
  * `{ error }`, so that model is reported as not estimated. Errors about the whole run
- * (bad credentials, BigQuery unavailable) throw, because every other model would fail
- * the same way.
+ * (bad credentials, rate limits, BigQuery unavailable) throw, because every other model
+ * would fail the same way.
  */
 export class BigQueryDryRunner implements DryRunner {
   readonly #projectId: string;
@@ -78,7 +78,7 @@ export class BigQueryDryRunner implements DryRunner {
 
     if (!response.ok) {
       const message = job.error?.message ?? `HTTP ${String(response.status)}`;
-      if (response.status === 401 || response.status >= 500) {
+      if (response.status === 401 || response.status === 429 || response.status >= 500) {
         throw new Error(`BigQuery dry run failed: ${message}`);
       }
       return { error: message };

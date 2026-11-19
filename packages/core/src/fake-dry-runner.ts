@@ -5,7 +5,7 @@ import type { DryRunResult, DryRunner } from "./types.ts";
  * SQL; unknown SQL returns `fallback` (an error by default, so missing fixtures are loud).
  */
 export class FakeDryRunner implements DryRunner {
-  readonly calls: { sql: string; location: string }[] = [];
+  readonly calls: { sql: string; location: string | undefined }[] = [];
   readonly #results: ReadonlyMap<string, DryRunResult>;
   readonly #fallback: DryRunResult;
 
@@ -17,7 +17,7 @@ export class FakeDryRunner implements DryRunner {
     this.#fallback = fallback;
   }
 
-  estimate(sql: string, location: string): Promise<DryRunResult> {
+  estimate(sql: string, location: string | undefined): Promise<DryRunResult> {
     this.calls.push({ sql, location });
     return Promise.resolve(this.#results.get(sql) ?? this.#fallback);
   }

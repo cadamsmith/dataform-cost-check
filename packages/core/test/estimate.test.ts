@@ -58,6 +58,13 @@ describe("estimateChange", () => {
     expect(runner.calls).toEqual([{ sql: "incr", location: "US" }]);
   });
 
+  it("passes no location to the runner when the model has none", async () => {
+    const { location: _location, ...m } = model({ name: "anywhere" });
+    const runner = new FakeDryRunner([[m.query, { bytes: 10 }]]);
+    await estimateChange({ kind: "added", target: m.target, head: m }, runner, config);
+    expect(runner.calls).toEqual([{ sql: m.query, location: undefined }]);
+  });
+
   it("skips views without calling BigQuery", async () => {
     const m = model({ name: "v", type: "view" });
     const runner = new FakeDryRunner();

@@ -47,6 +47,13 @@ describe("parseCompileOutput", () => {
     expect(new Set(parseCompileOutput(sample).map((m) => m.location))).toEqual(new Set(["US"]));
   });
 
+  it("leaves the location unset when the project has no default", () => {
+    const input = sampleWith((o) => {
+      delete (o as { projectConfig?: { defaultLocation?: string } }).projectConfig?.defaultLocation;
+    });
+    expect(parseCompileOutput(input).every((m) => !("location" in m))).toBe(true);
+  });
+
   it("joins an operation's statements into one script", () => {
     const input = sampleWith((o) => {
       (o.operations?.[0] as { queries: string[] }).queries = ["SELECT 1", "SELECT 2"];
@@ -79,6 +86,5 @@ describe("parseCompileOutput", () => {
 
   it("rejects output that is not a compile result", () => {
     expect(() => parseCompileOutput(null)).toThrow(/not a JSON object/);
-    expect(() => parseCompileOutput({ tables: [] })).toThrow(/defaultLocation/);
   });
 });

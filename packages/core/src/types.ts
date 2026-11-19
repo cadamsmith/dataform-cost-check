@@ -18,8 +18,11 @@ export interface Model {
   /** Incremental models only: the compiled incremental (steady-state) query. */
   readonly incrementalQuery?: string;
   readonly tags: readonly string[];
-  /** BigQuery location the query runs in, e.g. `US` or `europe-west2`. */
-  readonly location: string;
+  /**
+   * BigQuery location the query runs in, e.g. `US` or `europe-west2`. Absent when the
+   * project sets none; BigQuery then picks the location from the datasets the query reads.
+   */
+  readonly location?: string;
 }
 
 export type ChangeKind = "added" | "removed" | "modified";
@@ -43,7 +46,8 @@ export type DryRunResult = { readonly bytes: number } | { readonly error: string
  * tests and the scaffolded action use a fake.
  */
 export interface DryRunner {
-  estimate(sql: string, location: string): Promise<DryRunResult>;
+  /** `location` undefined means "let BigQuery choose from the referenced datasets". */
+  estimate(sql: string, location: string | undefined): Promise<DryRunResult>;
 }
 
 /** Most likely reason for a cost jump, when a heuristic can tell. */

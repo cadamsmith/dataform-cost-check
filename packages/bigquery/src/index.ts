@@ -20,10 +20,10 @@ export class BigQueryDryRunner implements DryRunner {
     this.#projectId = options.projectId;
   }
 
-  estimate(_sql: string, location: string): Promise<DryRunResult> {
+  estimate(_sql: string, location: string | undefined): Promise<DryRunResult> {
     return Promise.reject(
       new Error(
-        `BigQueryDryRunner is not implemented yet (project ${this.#projectId}, location ${location})`,
+        `BigQueryDryRunner is not implemented yet (project ${this.#projectId}, location ${location ?? "(chosen by BigQuery)"})`,
       ),
     );
   }

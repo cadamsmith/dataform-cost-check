@@ -115,7 +115,7 @@ const TABLE_TYPES: Readonly<Record<string, ModelType>> = {
 function toModel(
   action: CompiledAction,
   type: ModelType,
-  location: string,
+  location: string | undefined,
   query: string | undefined,
 ): Model {
   const { database, schema, name } = action.target ?? {};
@@ -132,7 +132,7 @@ function toModel(
     query,
     ...(action.incrementalQuery !== undefined && { incrementalQuery: action.incrementalQuery }),
     tags: action.tags ?? [],
-    location,
+    ...(location !== undefined && { location }),
   };
 }
 
@@ -142,7 +142,8 @@ function toModel(
  * - Declarations are sources, not models, and are left out.
  * - Disabled actions never run, so they cost nothing and are left out.
  * - Dataform 3 has no per-action location, so every model takes
- *   `projectConfig.defaultLocation`.
+ *   `projectConfig.defaultLocation`. When the project sets none, models carry no location
+ *   and BigQuery picks it from the datasets each query reads.
  * - Operations hold one query per statement; they are joined into one script.
  */
 export function parseCompileOutput(compiled: unknown): Model[] {
@@ -153,10 +154,7 @@ export function parseCompileOutput(compiled: unknown): Model[] {
   if (errors.length > 0) throw new DataformCompilationError(errors);
 
   const output = compiled as CompileOutput;
-  const location = output.projectConfig?.defaultLocation;
-  if (!location) {
-    throw new Error("Dataform compile output has no projectConfig.defaultLocation");
-  }
+  const location = output.projectConfig?.defaultLocation || undefined;
   const enabled = (actions: readonly CompiledAction[] | undefined) =>
     (actions ?? []).filter((a) => a.disabled !== true);
 

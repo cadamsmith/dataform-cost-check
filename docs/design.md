@@ -92,6 +92,11 @@ reports "not estimated" with a reason.
   label. v1 skips assertions and operations with a reason.
 - **Regions.** On-demand price varies by location. The price is configurable first;
   region-aware pricing comes later. Each model carries its BigQuery location.
+  Dataform 3 has no location per action, so a project has one location:
+  `defaultLocation` in `workflow_settings.yaml`. That setting is optional. When it is
+  missing, models carry no location and the dry run sends none, so BigQuery picks the
+  location from the datasets the query reads. Falling back to `US` was rejected: it would
+  make every dry run in an EU or regional project fail with an unclear error.
 - **Slot-based pricing.** Bytes do not map to dollars. The comment says so.
 - **Estimate is an upper bound.** Say "estimate", never "cost". Do not deduct the monthly
   free tier.

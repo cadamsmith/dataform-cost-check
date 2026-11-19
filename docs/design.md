@@ -85,14 +85,17 @@ reports "not estimated" with a reason.
   Estimate the incremental one as steady state (`core.steadyStateSql`); mention the
   full-refresh estimate separately.
 - **New upstream tables.** A dry run fails when the SQL references a table the same PR
-  creates. Report it plainly as not estimated; do not guess.
+  creates. Report it plainly as not estimated; do not guess. When a head dry run fails and
+  the query quotes the target of a model the PR adds (`core.readsNewTarget`), the reason
+  names that table and says it can be estimated once the table exists. Only direct reads
+  are caught: a query that reaches the new table through a new view keeps BigQuery's error.
 - **Every dry run fails.** The check fails when every changed model that needed a dry run
   came back not estimated, and quotes the first error (`action.dryRunFailure`). That
   pattern usually means a misconfigured project (no `bigquery.jobs.create`, the API
-  disabled, a wrong project ID), and passing green would hide it. Known false failure: a
-  PR whose only estimable change reads a table the same PR creates. Revisit with the new
-  upstream tables work, for example by leaving those failures out of the count, or by
-  warning instead of failing. Chosen in #13. Second known false failure: a table with
+  disabled, a wrong project ID), and passing green would hide it. Chosen in #13. Models that
+  read a table the same PR creates are left out of the count, since their failure is
+  expected and explained (this was the rule's first known false failure). Remaining known
+  false failure: a table with
   `requirePartitionFilter` rejects a dry run without that filter, so a PR whose only
   change drops it is reported as a misconfigured project rather than as the real cause.
 - **Views.** Creating a view costs nothing; the cost lands on whatever reads it. Views are

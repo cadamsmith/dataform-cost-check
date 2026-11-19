@@ -100,6 +100,11 @@ export type Estimate =
       readonly kind: ChangeKind;
       readonly type: ModelType;
       readonly reason: string;
+      /**
+       * Set when the failure is explained by the query reading a table that the same pull
+       * request creates, which does not exist yet: that table's target.
+       */
+      readonly newUpstream?: string;
     };
 
 /** User configuration, normally read from `dataform-cost-check.yml`. */

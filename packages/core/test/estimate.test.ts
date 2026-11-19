@@ -9,6 +9,7 @@ import {
   estimateChange,
   estimateChanges,
   partitionFilterCause,
+  readsNewTarget,
 } from "../src/index.ts";
 import type { Config, Estimate } from "../src/index.ts";
 import { model } from "./helpers.ts";
@@ -201,5 +202,58 @@ describe("partitionFilterCause", () => {
       config,
     );
     expect(e).toMatchObject({ likelyCause: { kind: "partition-filter-removed", table: T } });
+  });
+});
+
+describe("new upstream tables", () => {
+  const upstream = model({ name: "new_source", target: "proj.analytics.new_source" });
+  const reader = model({
+    name: "reader",
+    query: "SELECT * FROM `proj.analytics.new_source`",
+  });
+  const runner = new FakeDryRunner([[upstream.query, { bytes: 1024 }]], {
+    error: "Not found: Table proj:analytics.new_source was not found in location US",
+  });
+
+  it("reports a model reading a table the same PR adds plainly", async () => {
+    const report = await estimateChanges(
+      [
+        { kind: "added", target: upstream.target, head: upstream },
+        { kind: "added", target: reader.target, head: reader },
+      ],
+      runner,
+      config,
+    );
+    expect(report.estimates.find((e) => e.name === "reader")).toMatchObject({
+      status: "unestimable",
+      newUpstream: "proj.analytics.new_source",
+      reason:
+        "Reads `proj.analytics.new_source`, which this pull request creates, so it can only be estimated once that table exists.",
+    });
+    expect(report.estimates.find((e) => e.name === "new_source")).toMatchObject({
+      status: "estimated",
+    });
+  });
+
+  it("keeps the BigQuery error when the query reads no new table", async () => {
+    const e = await estimateChange(
+      { kind: "added", target: reader.target, head: reader },
+      runner,
+      config,
+      new Set(["proj.analytics.other"]),
+    );
+    expect(e).toMatchObject({
+      status: "unestimable",
+      reason:
+        "Dry run at head failed: Not found: Table proj:analytics.new_source was not found in location US",
+    });
+    expect(e).not.toHaveProperty("newUpstream");
+  });
+
+  it("matches only quoted, whole targets and never the model's own", () => {
+    const targets = new Set(["p.d.t", "p.d.self"]);
+    expect(readsNewTarget("SELECT * FROM `p.d.t`", "p.d.x", targets)).toBe("p.d.t");
+    expect(readsNewTarget("SELECT * FROM `p.d.t_old`", "p.d.x", targets)).toBeUndefined();
+    expect(readsNewTarget("SELECT * FROM `p.d.self`", "p.d.self", targets)).toBeUndefined();
   });
 });

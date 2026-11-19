@@ -24,11 +24,14 @@ export async function runCheck(deps: RunDeps): Promise<RunResult> {
  * Why the run as a whole should fail even though every model was "handled": every change
  * that needed a dry run came back unestimable. That usually means a misconfigured project
  * (no `bigquery.jobs.create`, the API disabled, a wrong project ID) rather than a problem
- * with the SQL, and passing green would hide it. Returns undefined when at least one dry
- * run succeeded or none was needed.
+ * with the SQL, and passing green would hide it. Models that read a table the same pull
+ * request creates are left out of the count: their failure is expected and explained.
+ * Returns undefined when at least one dry run succeeded or none was needed.
  */
 export function dryRunFailure(report: Report): string | undefined {
-  const tried = report.estimates.filter((e) => e.status !== "skipped");
+  const tried = report.estimates.filter(
+    (e) => e.status !== "skipped" && !(e.status === "unestimable" && e.newUpstream !== undefined),
+  );
   const failed = tried.filter((e) => e.status === "unestimable");
   const first = failed[0];
   if (first === undefined || failed.length < tried.length) return undefined;

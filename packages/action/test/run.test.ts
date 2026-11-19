@@ -71,6 +71,13 @@ describe("dryRunFailure", () => {
     expect(dryRunFailure(report([failed, estimated]))).toBeUndefined();
   });
 
+  it("leaves models reading a table the same PR creates out of the count", () => {
+    const newUpstream = { ...failed, name: "reader", newUpstream: "p.d.new" } as const;
+    expect(dryRunFailure(report([newUpstream]))).toBeUndefined();
+    expect(dryRunFailure(report([newUpstream, estimated]))).toBeUndefined();
+    expect(dryRunFailure(report([newUpstream, failed]))).toContain("1 tried");
+  });
+
   it("passes when nothing needed a dry run", () => {
     expect(dryRunFailure(report([]))).toBeUndefined();
     expect(dryRunFailure(report([skipped]))).toBeUndefined();

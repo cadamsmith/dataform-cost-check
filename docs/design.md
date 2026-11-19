@@ -37,7 +37,7 @@ its scope, how the check works, and the hard cases it must handle.
 - One configurable spending limit that can fail the check
 - Last refresh duration per table, as history, when permissions allow
 
-### Paid tier, working name "Driftline Team" (not in this repository; do not build here)
+### Paid tier (not in this repository; do not build here)
 
 - Cost history across PRs; budgets per team or dataset with approval rules
 - Slack alerts and a monthly finance summary

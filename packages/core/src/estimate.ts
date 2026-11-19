@@ -56,11 +56,29 @@ function estimable(model: Model): Model | undefined {
   return SKIP_REASONS[model.type] === undefined ? model : undefined;
 }
 
-/** Dry-run both sides of one change and price the difference. */
+/**
+ * The first target in `newTargets` that `sql` reads, other than the model's own. Compiled
+ * Dataform SQL quotes every reference as `` `project.dataset.table` ``.
+ */
+export function readsNewTarget(
+  sql: string,
+  ownTarget: string,
+  newTargets: ReadonlySet<string>,
+): string | undefined {
+  for (const t of newTargets) if (t !== ownTarget && sql.includes(`\`${t}\``)) return t;
+  return undefined;
+}
+
+/**
+ * Dry-run both sides of one change and price the difference. `newTargets` holds the
+ * targets this pull request adds: a head query that reads one fails its dry run because
+ * the table does not exist yet, and is reported as such.
+ */
 export async function estimateChange(
   change: ModelChange,
   runner: DryRunner,
   config: Config,
+  newTargets: ReadonlySet<string> = new Set(),
 ): Promise<Estimate> {
   const model = change.kind === "removed" ? change.base : change.head;
   const common = { target: change.target, name: model.name, kind: change.kind, type: model.type };
@@ -87,6 +105,18 @@ export async function estimateChange(
     };
   }
   if ("error" in headResult) {
+    const upstream =
+      head === undefined
+        ? undefined
+        : readsNewTarget(steadyStateSql(head), change.target, newTargets);
+    if (upstream !== undefined) {
+      return {
+        status: "unestimable",
+        ...common,
+        reason: `Reads \`${upstream}\`, which this pull request creates, so it can only be estimated once that table exists.`,
+        newUpstream: upstream,
+      };
+    }
     return {
       status: "unestimable",
       ...common,
@@ -113,7 +143,10 @@ export async function estimateChanges(
   runner: DryRunner,
   config: Config,
 ): Promise<Report> {
-  const estimates = await Promise.all(changes.map((c) => estimateChange(c, runner, config)));
+  const newTargets = new Set(changes.filter((c) => c.kind === "added").map((c) => c.target));
+  const estimates = await Promise.all(
+    changes.map((c) => estimateChange(c, runner, config, newTargets)),
+  );
   return buildReport(estimates, config);
 }
 

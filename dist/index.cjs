@@ -45807,7 +45807,11 @@ function steadyStateSql(model) {
 function estimable(model) {
   return SKIP_REASONS[model.type] === void 0 ? model : void 0;
 }
-async function estimateChange(change, runner, config) {
+function readsNewTarget(sql, ownTarget, newTargets) {
+  for (const t2 of newTargets) if (t2 !== ownTarget && sql.includes(`\`${t2}\``)) return t2;
+  return void 0;
+}
+async function estimateChange(change, runner, config, newTargets = /* @__PURE__ */ new Set()) {
   const model = change.kind === "removed" ? change.base : change.head;
   const common = { target: change.target, name: model.name, kind: change.kind, type: model.type };
   const base = change.kind === "added" ? void 0 : estimable(change.base);
@@ -45827,6 +45831,15 @@ async function estimateChange(change, runner, config) {
     };
   }
   if ("error" in headResult) {
+    const upstream = head === void 0 ? void 0 : readsNewTarget(steadyStateSql(head), change.target, newTargets);
+    if (upstream !== void 0) {
+      return {
+        status: "unestimable",
+        ...common,
+        reason: `Reads \`${upstream}\`, which this pull request creates, so it can only be estimated once that table exists.`,
+        newUpstream: upstream
+      };
+    }
     return {
       status: "unestimable",
       ...common,
@@ -45846,7 +45859,10 @@ async function estimateChange(change, runner, config) {
   };
 }
 async function estimateChanges(changes, runner, config) {
-  const estimates = await Promise.all(changes.map((c) => estimateChange(c, runner, config)));
+  const newTargets = new Set(changes.filter((c) => c.kind === "added").map((c) => c.target));
+  const estimates = await Promise.all(
+    changes.map((c) => estimateChange(c, runner, config, newTargets))
+  );
   return buildReport(estimates, config);
 }
 function buildReport(estimates, config) {
@@ -46220,7 +46236,9 @@ async function runCheck(deps) {
   return { report, comment: renderComment(report) };
 }
 function dryRunFailure(report) {
-  const tried = report.estimates.filter((e2) => e2.status !== "skipped");
+  const tried = report.estimates.filter(
+    (e2) => e2.status !== "skipped" && !(e2.status === "unestimable" && e2.newUpstream !== void 0)
+  );
   const failed = tried.filter((e2) => e2.status === "unestimable");
   const first = failed[0];
   if (first === void 0 || failed.length < tried.length) return void 0;

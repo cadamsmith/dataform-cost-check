@@ -1,0 +1,9 @@
+config {
+  type: "assertion",
+  description: "Fails if a customer appears more than once."
+}
+
+SELECT customer_id
+FROM ${ref("customers")}
+GROUP BY customer_id
+HAVING COUNT(*) > 1

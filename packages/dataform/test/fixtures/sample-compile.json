@@ -1,0 +1,205 @@
+{
+  "tables": [
+    {
+      "type": "table",
+      "target": {
+        "schema": "analytics",
+        "name": "customers",
+        "database": "cost-check-sample"
+      },
+      "query": "\n\nSELECT\n  customer_id,\n  MIN(order_date) AS first_order_date,\n  COUNT(*) AS order_count\nFROM `cost-check-sample.raw.orders`\nGROUP BY customer_id\n",
+      "disabled": false,
+      "fileName": "definitions/customers.sqlx",
+      "tags": ["daily"],
+      "actionDescriptor": {
+        "description": "One row per customer, rebuilt in full each run."
+      },
+      "dependencyTargets": [
+        {
+          "schema": "raw",
+          "name": "orders",
+          "database": "cost-check-sample"
+        }
+      ],
+      "canonicalTarget": {
+        "schema": "analytics",
+        "name": "customers",
+        "database": "cost-check-sample"
+      },
+      "enumType": "TABLE"
+    },
+    {
+      "type": "incremental",
+      "target": {
+        "schema": "analytics",
+        "name": "orders_daily",
+        "database": "cost-check-sample"
+      },
+      "query": "\n\nSELECT\n  order_date,\n  COUNT(*) AS orders,\n  SUM(amount) AS revenue\nFROM `cost-check-sample.raw.orders`\n\nGROUP BY order_date\n",
+      "disabled": false,
+      "fileName": "definitions/orders_daily.sqlx",
+      "bigquery": {
+        "partitionBy": "order_date"
+      },
+      "tags": ["hourly"],
+      "actionDescriptor": {
+        "description": "Daily order totals. The incremental query reads only new partitions."
+      },
+      "incrementalQuery": "\n\nSELECT\n  order_date,\n  COUNT(*) AS orders,\n  SUM(amount) AS revenue\nFROM `cost-check-sample.raw.orders`\nWHERE order_date >= (SELECT MAX(order_date) FROM `cost-check-sample.analytics.orders_daily`)\nGROUP BY order_date\n",
+      "dependencyTargets": [
+        {
+          "schema": "raw",
+          "name": "orders",
+          "database": "cost-check-sample"
+        }
+      ],
+      "uniqueKey": ["order_date"],
+      "canonicalTarget": {
+        "schema": "analytics",
+        "name": "orders_daily",
+        "database": "cost-check-sample"
+      },
+      "enumType": "INCREMENTAL"
+    },
+    {
+      "type": "view",
+      "target": {
+        "schema": "analytics",
+        "name": "orders_recent",
+        "database": "cost-check-sample"
+      },
+      "query": "\n\nSELECT *\nFROM `cost-check-sample.raw.orders`\nWHERE order_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 7 DAY)\n",
+      "disabled": false,
+      "fileName": "definitions/orders_recent.sqlx",
+      "actionDescriptor": {
+        "description": "Orders from the last 7 days. Creating it scans nothing; readers pay."
+      },
+      "dependencyTargets": [
+        {
+          "schema": "raw",
+          "name": "orders",
+          "database": "cost-check-sample"
+        }
+      ],
+      "canonicalTarget": {
+        "schema": "analytics",
+        "name": "orders_recent",
+        "database": "cost-check-sample"
+      },
+      "enumType": "VIEW"
+    }
+  ],
+  "operations": [
+    {
+      "target": {
+        "schema": "analytics",
+        "name": "grant_readers",
+        "database": "cost-check-sample"
+      },
+      "queries": [
+        "\n\nGRANT `roles/bigquery.dataViewer` ON TABLE `cost-check-sample.analytics.customers` TO \"group:readers@example.com\"\n"
+      ],
+      "fileName": "definitions/grant_readers.sqlx",
+      "actionDescriptor": {
+        "description": "Grants read access on the customers table."
+      },
+      "dependencyTargets": [
+        {
+          "schema": "analytics",
+          "name": "customers",
+          "database": "cost-check-sample"
+        }
+      ],
+      "canonicalTarget": {
+        "schema": "analytics",
+        "name": "grant_readers",
+        "database": "cost-check-sample"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "query": "\n\nSELECT customer_id\nFROM `cost-check-sample.analytics.customers`\nGROUP BY customer_id\nHAVING COUNT(*) > 1\n",
+      "fileName": "definitions/customers_unique.sqlx",
+      "target": {
+        "schema": "analytics_assertions",
+        "name": "customers_unique",
+        "database": "cost-check-sample"
+      },
+      "actionDescriptor": {
+        "description": "Fails if a customer appears more than once."
+      },
+      "dependencyTargets": [
+        {
+          "schema": "analytics",
+          "name": "customers",
+          "database": "cost-check-sample"
+        }
+      ],
+      "canonicalTarget": {
+        "schema": "analytics_assertions",
+        "name": "customers_unique",
+        "database": "cost-check-sample"
+      }
+    }
+  ],
+  "projectConfig": {
+    "warehouse": "bigquery",
+    "defaultSchema": "analytics",
+    "assertionSchema": "analytics_assertions",
+    "defaultDatabase": "cost-check-sample",
+    "defaultLocation": "US"
+  },
+  "graphErrors": {},
+  "declarations": [
+    {
+      "target": {
+        "schema": "raw",
+        "name": "orders",
+        "database": "cost-check-sample"
+      },
+      "actionDescriptor": {
+        "description": "Raw orders landed by ingestion. Partitioned by order_date."
+      },
+      "fileName": "definitions/sources/raw_orders.sqlx",
+      "canonicalTarget": {
+        "schema": "raw",
+        "name": "orders",
+        "database": "cost-check-sample"
+      }
+    }
+  ],
+  "dataformCoreVersion": "3.0.0",
+  "targets": [
+    {
+      "schema": "analytics",
+      "name": "customers",
+      "database": "cost-check-sample"
+    },
+    {
+      "schema": "analytics_assertions",
+      "name": "customers_unique",
+      "database": "cost-check-sample"
+    },
+    {
+      "schema": "analytics",
+      "name": "grant_readers",
+      "database": "cost-check-sample"
+    },
+    {
+      "schema": "analytics",
+      "name": "orders_daily",
+      "database": "cost-check-sample"
+    },
+    {
+      "schema": "analytics",
+      "name": "orders_recent",
+      "database": "cost-check-sample"
+    },
+    {
+      "schema": "raw",
+      "name": "orders",
+      "database": "cost-check-sample"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+config {
+  type: "operations",
+  description: "Grants read access on the customers table.",
+  dependencies: ["customers"]
+}
+
+GRANT `roles/bigquery.dataViewer` ON TABLE ${ref("customers")} TO "group:readers@example.com"

@@ -92,7 +92,9 @@ reports "not estimated" with a reason.
   disabled, a wrong project ID), and passing green would hide it. Known false failure: a
   PR whose only estimable change reads a table the same PR creates. Revisit with the new
   upstream tables work, for example by leaving those failures out of the count, or by
-  warning instead of failing. Chosen in #13.
+  warning instead of failing. Chosen in #13. Second known false failure: a table with
+  `requirePartitionFilter` rejects a dry run without that filter, so a PR whose only
+  change drops it is reported as a misconfigured project rather than as the real cause.
 - **Views.** Creating a view costs nothing; the cost lands on whatever reads it. Views are
   skipped with that reason.
 - **Assertions, operations, pre/post operations.** Decide per type: estimate, skip, or
@@ -107,5 +109,13 @@ reports "not estimated" with a reason.
 - **Slot-based pricing.** Bytes do not map to dollars. The comment says so.
 - **Estimate is an upper bound.** Say "estimate", never "cost". Do not deduct the monthly
   free tier.
-- **Partition filter detection.** Start with a simple heuristic (a large byte jump on a
-  partitioned table); refine later. Surfaced as `Estimate.likelyCause`.
+- **Partition filter detection.** A heuristic, surfaced as `Estimate.likelyCause` with the
+  table name (`core.partitionFilterCause`). It fires when base and head both read the same
+  partitioned table, and head reads at least 10 times as many bytes and at least 1 GiB more
+  per run. The runner learns which tables are partitioned from the dry run's
+  `referencedTables` and one `tables.get` per table (time or range partitioning). That
+  lookup is extra detail: if it fails (no access, a wildcard table, rate limits), the
+  table is left out and the estimate stands. A dry run over a view lists only the view,
+  not the tables under it, so no cause is named there: by design, the check does not
+  guess through views. Not detected: a filter that still exists but no longer prunes
+  (for example, wrapped in a function).

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Run Dataform Cost Check locally on a two-commit demo project that reads a public
-# BigQuery table. The head commit drops a partition filter. Dry runs are free.
+# BigQuery view over a partitioned table. The head commit drops the filter on its
+# partition column. The table sits behind a view, so no likely cause is named; see
+# examples/trends-demo for one that is. Dry runs are free.
 #
 # Needs: the Dataform CLI (npm install -g @dataform/cli), Application Default
 # Credentials (gcloud auth application-default login), and a built dist/ (pnpm build).

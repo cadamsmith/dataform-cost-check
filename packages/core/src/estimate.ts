@@ -1,5 +1,38 @@
 import { exceedsLimit, monthlyDelta, runsPerDayFor } from "./pricing.ts";
-import type { Config, DryRunner, Estimate, Model, ModelChange, Report } from "./types.ts";
+import type {
+  Config,
+  DryRunResult,
+  DryRunner,
+  Estimate,
+  LikelyCause,
+  Model,
+  ModelChange,
+  Report,
+} from "./types.ts";
+
+/** How many times more a run must read before a lost partition filter is suspected. */
+export const PARTITION_JUMP_RATIO = 10;
+/** And by how much, per run, so small tables jumping from 1 MiB to 20 MiB are not flagged. */
+export const PARTITION_JUMP_MIN_BYTES = 2 ** 30;
+
+type DryRunBytes = Extract<DryRunResult, { bytes: number }>;
+
+/**
+ * The partition-filter heuristic (docs/design.md, "Partition filter detection"): both
+ * sides read the same partitioned table, and head reads at least `PARTITION_JUMP_RATIO`
+ * times as much, and at least `PARTITION_JUMP_MIN_BYTES` more. Pure.
+ */
+export function partitionFilterCause(
+  base: DryRunBytes,
+  head: DryRunBytes,
+): LikelyCause | undefined {
+  if (base.bytes <= 0) return undefined;
+  if (head.bytes < base.bytes * PARTITION_JUMP_RATIO) return undefined;
+  if (head.bytes - base.bytes < PARTITION_JUMP_MIN_BYTES) return undefined;
+  const baseTables = new Set(base.partitionedTables ?? []);
+  const table = (head.partitionedTables ?? []).find((t) => baseTables.has(t));
+  return table === undefined ? undefined : { kind: "partition-filter-removed", table };
+}
 
 /** Why some model types are not estimated. See docs/design.md, "Hard cases". */
 const SKIP_REASONS: Partial<Record<Model["type"], string>> = {
@@ -62,6 +95,7 @@ export async function estimateChange(
   }
 
   const runsPerDay = runsPerDayFor(model, config);
+  const likelyCause = partitionFilterCause(baseResult, headResult);
   return {
     status: "estimated",
     ...common,
@@ -69,7 +103,7 @@ export async function estimateChange(
     headBytes: headResult.bytes,
     runsPerDay,
     monthlyDelta: monthlyDelta(baseResult.bytes, headResult.bytes, config.pricePerTib, runsPerDay),
-    // TODO(milestone 2): set likelyCause via the partition-filter heuristic.
+    ...(likelyCause !== undefined && { likelyCause }),
   };
 }
 

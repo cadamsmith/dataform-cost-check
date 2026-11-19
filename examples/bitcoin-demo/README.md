@@ -1,6 +1,6 @@
 # Bitcoin demo
 
-A local run of the check on a two-commit Dataform project. It reads the public table
+A local run of the check on a two-commit Dataform project. It reads the public view
 `bigquery-public-data.crypto_bitcoin.transactions`, and the second commit deletes the
 `WHERE` line that limits the scan to one month.
 

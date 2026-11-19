@@ -16,11 +16,20 @@ export interface BigQueryDryRunnerOptions {
   readonly fetch?: typeof fetch;
 }
 
+interface TableReference {
+  readonly projectId?: string;
+  readonly datasetId?: string;
+  readonly tableId?: string;
+}
+
 /** The parts of a `jobs.insert` response this runner reads. */
 interface JobResponse {
   readonly statistics?: {
     readonly totalBytesProcessed?: string;
-    readonly query?: { readonly totalBytesProcessed?: string };
+    readonly query?: {
+      readonly totalBytesProcessed?: string;
+      readonly referencedTables?: readonly TableReference[];
+    };
   };
   readonly error?: { readonly message?: string };
 }
@@ -48,6 +57,8 @@ export class BigQueryDryRunner implements DryRunner {
   readonly #projectId: string;
   readonly #getAccessToken: () => Promise<string>;
   readonly #fetch: typeof fetch;
+  /** `project.dataset.table` → whether it is partitioned; undefined when unknown. */
+  readonly #partitioned = new Map<string, Promise<boolean | undefined>>();
 
   constructor(options: BigQueryDryRunnerOptions) {
     this.#projectId = options.projectId;
@@ -88,6 +99,56 @@ export class BigQueryDryRunner implements DryRunner {
     if (bytes === undefined || !/^\d+$/.test(bytes)) {
       return { error: "BigQuery returned no bytes-processed figure for the dry run." };
     }
-    return { bytes: Number(bytes) };
+    const partitionedTables = await this.#partitionedTables(
+      job.statistics?.query?.referencedTables ?? [],
+    );
+    return { bytes: Number(bytes), partitionedTables };
+  }
+
+  /**
+   * Which of the tables a dry run read are partitioned, for the partition-filter
+   * heuristic. Extra detail only: a lookup that fails for any reason (no access, a
+   * wildcard table, rate limits) leaves that table out instead of failing the estimate.
+   */
+  async #partitionedTables(refs: readonly TableReference[]): Promise<string[]> {
+    const ids = refs.flatMap((r) =>
+      r.projectId && r.datasetId && r.tableId && !r.tableId.includes("*")
+        ? [[r.projectId, r.datasetId, r.tableId] as const]
+        : [],
+    );
+    const checked = await Promise.all(
+      ids.map(async (parts) => {
+        const id = parts.join(".");
+        let lookup = this.#partitioned.get(id);
+        if (lookup === undefined) {
+          lookup = this.#isPartitioned(...parts);
+          this.#partitioned.set(id, lookup);
+        }
+        return (await lookup) === true ? [id] : [];
+      }),
+    );
+    return checked.flat();
+  }
+
+  async #isPartitioned(
+    project: string,
+    dataset: string,
+    table: string,
+  ): Promise<boolean | undefined> {
+    try {
+      const e = encodeURIComponent;
+      const response = await this.#fetch(
+        `${API_ROOT}/projects/${e(project)}/datasets/${e(dataset)}/tables/${e(table)}?fields=timePartitioning,rangePartitioning`,
+        { headers: { authorization: `Bearer ${await this.#getAccessToken()}` } },
+      );
+      if (!response.ok) return undefined;
+      const meta = (await response.json()) as {
+        timePartitioning?: unknown;
+        rangePartitioning?: unknown;
+      };
+      return meta.timePartitioning !== undefined || meta.rangePartitioning !== undefined;
+    } catch {
+      return undefined;
+    }
   }
 }

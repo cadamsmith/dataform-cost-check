@@ -3,9 +3,12 @@ import {
   BYTES_PER_TIB,
   DEFAULT_CONFIG,
   FakeDryRunner,
+  PARTITION_JUMP_MIN_BYTES,
+  PARTITION_JUMP_RATIO,
   buildReport,
   estimateChange,
   estimateChanges,
+  partitionFilterCause,
 } from "../src/index.ts";
 import type { Config, Estimate } from "../src/index.ts";
 import { model } from "./helpers.ts";
@@ -144,5 +147,59 @@ describe("estimateChanges", () => {
   it("returns an empty, passing report when nothing changed", async () => {
     const report = await estimateChanges([], new FakeDryRunner(), config);
     expect(report).toMatchObject({ estimates: [], totalMonthlyDelta: 0, overLimit: false });
+  });
+});
+
+describe("partitionFilterCause", () => {
+  const GiB = 2 ** 30;
+  const T = "proj.raw.events";
+  const side = (bytes: number, tables: string[] = [T]) => ({ bytes, partitionedTables: tables });
+
+  it("flags a large jump on a partitioned table both sides read", () => {
+    expect(partitionFilterCause(side(0.1 * GiB), side(5 * GiB))).toEqual({
+      kind: "partition-filter-removed",
+      table: T,
+    });
+  });
+
+  it("needs at least PARTITION_JUMP_RATIO times the bytes", () => {
+    const base = 0.5 * GiB;
+    expect(partitionFilterCause(side(base), side(base * PARTITION_JUMP_RATIO))).toBeDefined();
+    expect(partitionFilterCause(side(base), side(base * PARTITION_JUMP_RATIO - 1))).toBeUndefined();
+  });
+
+  it("needs at least PARTITION_JUMP_MIN_BYTES more per run", () => {
+    const base = 1024;
+    expect(partitionFilterCause(side(base), side(base + PARTITION_JUMP_MIN_BYTES))).toBeDefined();
+    expect(
+      partitionFilterCause(side(base), side(base + PARTITION_JUMP_MIN_BYTES - 1)),
+    ).toBeUndefined();
+  });
+
+  it("needs the same partitioned table on both sides", () => {
+    expect(partitionFilterCause(side(0.1 * GiB, []), side(5 * GiB))).toBeUndefined();
+    expect(
+      partitionFilterCause(side(0.1 * GiB), side(5 * GiB, ["proj.raw.other"])),
+    ).toBeUndefined();
+    expect(partitionFilterCause({ bytes: 0.1 * GiB }, { bytes: 5 * GiB })).toBeUndefined();
+  });
+
+  it("never flags a side that read nothing", () => {
+    expect(partitionFilterCause(side(0), side(5 * GiB))).toBeUndefined();
+  });
+
+  it("is set on the estimate by estimateChange", async () => {
+    const base = model({ name: "t", query: "old" });
+    const head = model({ name: "t", query: "new" });
+    const runner = new FakeDryRunner([
+      ["old", side(0.1 * GiB)],
+      ["new", side(5 * GiB)],
+    ]);
+    const e = await estimateChange(
+      { kind: "modified", target: base.target, base, head },
+      runner,
+      config,
+    );
+    expect(e).toMatchObject({ likelyCause: { kind: "partition-filter-removed", table: T } });
   });
 });

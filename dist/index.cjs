@@ -45640,6 +45640,8 @@ var BigQueryDryRunner = class {
   #projectId;
   #getAccessToken;
   #fetch;
+  /** `project.dataset.table` → whether it is partitioned; undefined when unknown. */
+  #partitioned = /* @__PURE__ */ new Map();
   constructor(options) {
     this.#projectId = options.projectId;
     this.#getAccessToken = options.getAccessToken ?? applicationDefaultToken();
@@ -45676,7 +45678,46 @@ var BigQueryDryRunner = class {
     if (bytes === void 0 || !/^\d+$/.test(bytes)) {
       return { error: "BigQuery returned no bytes-processed figure for the dry run." };
     }
-    return { bytes: Number(bytes) };
+    const partitionedTables = await this.#partitionedTables(
+      job.statistics?.query?.referencedTables ?? []
+    );
+    return { bytes: Number(bytes), partitionedTables };
+  }
+  /**
+   * Which of the tables a dry run read are partitioned, for the partition-filter
+   * heuristic. Extra detail only: a lookup that fails for any reason (no access, a
+   * wildcard table, rate limits) leaves that table out instead of failing the estimate.
+   */
+  async #partitionedTables(refs) {
+    const ids = refs.flatMap(
+      (r2) => r2.projectId && r2.datasetId && r2.tableId && !r2.tableId.includes("*") ? [[r2.projectId, r2.datasetId, r2.tableId]] : []
+    );
+    const checked = await Promise.all(
+      ids.map(async (parts) => {
+        const id = parts.join(".");
+        let lookup = this.#partitioned.get(id);
+        if (lookup === void 0) {
+          lookup = this.#isPartitioned(...parts);
+          this.#partitioned.set(id, lookup);
+        }
+        return await lookup === true ? [id] : [];
+      })
+    );
+    return checked.flat();
+  }
+  async #isPartitioned(project, dataset, table) {
+    try {
+      const e2 = encodeURIComponent;
+      const response = await this.#fetch(
+        `${API_ROOT}/projects/${e2(project)}/datasets/${e2(dataset)}/tables/${e2(table)}?fields=timePartitioning,rangePartitioning`,
+        { headers: { authorization: `Bearer ${await this.#getAccessToken()}` } }
+      );
+      if (!response.ok) return void 0;
+      const meta = await response.json();
+      return meta.timePartitioning !== void 0 || meta.rangePartitioning !== void 0;
+    } catch {
+      return void 0;
+    }
   }
 };
 
@@ -45745,6 +45786,16 @@ function indexByTarget(models, side) {
 }
 
 // ../core/src/estimate.ts
+var PARTITION_JUMP_RATIO = 10;
+var PARTITION_JUMP_MIN_BYTES = 2 ** 30;
+function partitionFilterCause(base, head) {
+  if (base.bytes <= 0) return void 0;
+  if (head.bytes < base.bytes * PARTITION_JUMP_RATIO) return void 0;
+  if (head.bytes - base.bytes < PARTITION_JUMP_MIN_BYTES) return void 0;
+  const baseTables = new Set(base.partitionedTables ?? []);
+  const table = (head.partitionedTables ?? []).find((t2) => baseTables.has(t2));
+  return table === void 0 ? void 0 : { kind: "partition-filter-removed", table };
+}
 var SKIP_REASONS = {
   view: "Views cost nothing to create; the cost lands on whatever reads them.",
   assertion: "Assertions are not estimated yet.",
@@ -45783,14 +45834,15 @@ async function estimateChange(change, runner, config) {
     };
   }
   const runsPerDay = runsPerDayFor(model, config);
+  const likelyCause = partitionFilterCause(baseResult, headResult);
   return {
     status: "estimated",
     ...common,
     baseBytes: baseResult.bytes,
     headBytes: headResult.bytes,
     runsPerDay,
-    monthlyDelta: monthlyDelta(baseResult.bytes, headResult.bytes, config.pricePerTib, runsPerDay)
-    // TODO(milestone 2): set likelyCause via the partition-filter heuristic.
+    monthlyDelta: monthlyDelta(baseResult.bytes, headResult.bytes, config.pricePerTib, runsPerDay),
+    ...likelyCause !== void 0 && { likelyCause }
   };
 }
 async function estimateChanges(changes, runner, config) {
@@ -45814,9 +45866,9 @@ function buildReport(estimates, config) {
 // ../core/src/render.ts
 var COMMENT_MARKER = "<!-- dataform-cost-check -->";
 var UNITS = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"];
-var CAUSE_TEXT = {
-  "partition-filter-removed": "the partition filter was removed"
-};
+function causeText(cause) {
+  return `a filter on the partitioned table \`${cause.table}\` was removed`;
+}
 function renderComment(report) {
   const estimated = report.estimates.filter((e2) => e2.status === "estimated");
   const notEstimated = report.estimates.filter((e2) => e2.status !== "estimated");
@@ -45839,7 +45891,7 @@ function renderComment(report) {
     }
     lines.push("");
     const causes = estimated.flatMap(
-      (e2) => e2.likelyCause === void 0 ? [] : [`- \`${e2.name}\`: likely cause: ${CAUSE_TEXT[e2.likelyCause]}.`]
+      (e2) => e2.likelyCause === void 0 ? [] : [`- \`${e2.name}\`: likely cause: ${causeText(e2.likelyCause)}.`]
     );
     if (causes.length > 0) lines.push(...causes, "");
   }

@@ -35,7 +35,7 @@ This change adds an estimated **+$6,750.92 / month**. :x: Over the $100.00 limit
 | \`orders_daily\` | modified | 40.96 GiB → 1.24 TiB | 30 | +$6,750.00 |
 | \`customers\` | added | 0 B → 5.00 GiB | 1 | +$0.92 |
 
-- \`orders_daily\`: likely cause: the partition filter was removed.
+- \`orders_daily\`: likely cause: a filter on the partitioned table \`proj.raw.orders\` was removed.
 
 **Not estimated**
 

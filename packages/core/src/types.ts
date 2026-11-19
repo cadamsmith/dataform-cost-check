@@ -117,6 +117,11 @@ export type Estimate =
 export interface Config {
   /** USD per TiB scanned (on-demand pricing). */
   readonly pricePerTib: number;
+  /**
+   * USD per TiB by BigQuery location (e.g. `EU`, `asia-northeast1`), matched without
+   * regard to case. Models whose location is not listed, or unset, use `pricePerTib`.
+   */
+  readonly pricePerTibByLocation?: Readonly<Record<string, number>>;
   /** Fail the check when the total monthly delta exceeds this. `null` disables the limit. */
   readonly limitMonthly: number | null;
   readonly defaultRunsPerDay: number;
@@ -130,6 +135,7 @@ export interface Report {
   /** Sum of `monthlyDelta` over estimated models, in USD. */
   readonly totalMonthlyDelta: number;
   readonly pricePerTib: number;
+  readonly pricePerTibByLocation?: Readonly<Record<string, number>>;
   readonly limitMonthly: number | null;
   readonly overLimit: boolean;
 }

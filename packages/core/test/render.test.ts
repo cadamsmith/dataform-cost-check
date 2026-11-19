@@ -136,3 +136,10 @@ describe("formatUsd", () => {
     expect(formatUsd(amount, { signed })).toBe(expected);
   });
 });
+
+describe("renderComment pricing footer", () => {
+  it("lists per-location prices when configured", () => {
+    const body = renderComment(report({ pricePerTibByLocation: { "asia-northeast1": 7.5 } }));
+    expect(body).toContain("priced at $6.25 per TiB on-demand ($7.50 in asia-northeast1),");
+  });
+});

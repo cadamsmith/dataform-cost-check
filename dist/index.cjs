@@ -45742,6 +45742,15 @@ function monthlyCost(bytes, pricePerTib, runsPerDay) {
 function monthlyDelta(baseBytes, headBytes, pricePerTib, runsPerDay) {
   return monthlyCost(headBytes, pricePerTib, runsPerDay) - monthlyCost(baseBytes, pricePerTib, runsPerDay);
 }
+function pricePerTibFor(model, config) {
+  const location = model.location?.toLowerCase();
+  if (location !== void 0) {
+    for (const [key, price] of Object.entries(config.pricePerTibByLocation ?? {})) {
+      if (key.toLowerCase() === location) return price;
+    }
+  }
+  return config.pricePerTib;
+}
 function runsPerDayFor(model, config) {
   const byName = config.runsPerDay[model.name];
   if (byName !== void 0) return byName;
@@ -45855,7 +45864,12 @@ async function estimateChange(change, runner, config, newTargets = /* @__PURE__ 
     baseBytes: baseResult.bytes,
     headBytes: headResult.bytes,
     runsPerDay,
-    monthlyDelta: monthlyDelta(baseResult.bytes, headResult.bytes, config.pricePerTib, runsPerDay),
+    monthlyDelta: monthlyDelta(
+      baseResult.bytes,
+      headResult.bytes,
+      pricePerTibFor(model, config),
+      runsPerDay
+    ),
     ...likelyCause !== void 0 && { likelyCause },
     ...fullRefreshResult !== void 0 && "bytes" in fullRefreshResult && { fullRefreshBytes: fullRefreshResult.bytes }
   };
@@ -45876,6 +45890,9 @@ function buildReport(estimates, config) {
     estimates,
     totalMonthlyDelta,
     pricePerTib: config.pricePerTib,
+    ...config.pricePerTibByLocation !== void 0 && {
+      pricePerTibByLocation: config.pricePerTibByLocation
+    },
     limitMonthly: config.limitMonthly,
     overLimit: exceedsLimit(totalMonthlyDelta, config.limitMonthly)
   };
@@ -45940,8 +45957,12 @@ function headline(report) {
   return text;
 }
 function footer(report) {
+  const byLocation = Object.entries(report.pricePerTibByLocation ?? {}).map(
+    ([location, price2]) => `${formatUsd(price2)} in ${location}`
+  );
+  const price = byLocation.length === 0 ? `${formatUsd(report.pricePerTib)} per TiB on-demand` : `${formatUsd(report.pricePerTib)} per TiB on-demand (${byLocation.join(", ")})`;
   return [
-    `<sub>Estimates are upper bounds from BigQuery dry runs, priced at ${formatUsd(report.pricePerTib)} per TiB on-demand, `,
+    `<sub>Estimates are upper bounds from BigQuery dry runs, priced at ${price}, `,
     "with no free-tier deduction. If this project uses slot-based (Editions) pricing, bytes scanned ",
     "do not map to dollars and these figures do not apply.</sub>"
   ].join("");
@@ -46131,7 +46152,13 @@ var import_yaml = __toESM(require_dist3(), 1);
 function parseConfig(text) {
   const raw = (0, import_yaml.parse)(text) ?? {};
   if (!isRecord(raw)) throw new ConfigError("the config must be a YAML mapping");
-  const known = /* @__PURE__ */ new Set(["price_per_tib", "limit_monthly", "default_runs_per_day", "runs_per_day"]);
+  const known = /* @__PURE__ */ new Set([
+    "price_per_tib",
+    "price_per_tib_by_location",
+    "limit_monthly",
+    "default_runs_per_day",
+    "runs_per_day"
+  ]);
   for (const key of Object.keys(raw)) {
     if (!known.has(key)) throw new ConfigError(`unknown key "${key}"`);
   }
@@ -46141,8 +46168,20 @@ function parseConfig(text) {
   for (const [name, value] of Object.entries(rawRuns)) {
     runsPerDay[name] = nonNegative(`runs_per_day.${name}`, value);
   }
+  const rawPrices = raw.price_per_tib_by_location;
+  let pricePerTibByLocation;
+  if (rawPrices !== void 0 && rawPrices !== null) {
+    if (!isRecord(rawPrices)) {
+      throw new ConfigError("price_per_tib_by_location must be a mapping of location to number");
+    }
+    pricePerTibByLocation = {};
+    for (const [location, value] of Object.entries(rawPrices)) {
+      pricePerTibByLocation[location] = nonNegative(`price_per_tib_by_location.${location}`, value);
+    }
+  }
   return {
     pricePerTib: optional("price_per_tib", raw.price_per_tib, DEFAULT_CONFIG.pricePerTib),
+    ...pricePerTibByLocation !== void 0 && { pricePerTibByLocation },
     limitMonthly: raw.limit_monthly === void 0 || raw.limit_monthly === null ? DEFAULT_CONFIG.limitMonthly : nonNegative("limit_monthly", raw.limit_monthly),
     defaultRunsPerDay: optional(
       "default_runs_per_day",

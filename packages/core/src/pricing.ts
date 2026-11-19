@@ -43,6 +43,21 @@ export function monthlyDelta(
 }
 
 /**
+ * The on-demand price for a model's location: a `pricePerTibByLocation` entry matched
+ * without regard to case, else `pricePerTib`. A model with no location (BigQuery picks
+ * one at run time) uses `pricePerTib`.
+ */
+export function pricePerTibFor(model: Pick<Model, "location">, config: Config): number {
+  const location = model.location?.toLowerCase();
+  if (location !== undefined) {
+    for (const [key, price] of Object.entries(config.pricePerTibByLocation ?? {})) {
+      if (key.toLowerCase() === location) return price;
+    }
+  }
+  return config.pricePerTib;
+}
+
+/**
  * How often a model runs. Precedence: an override for the model's name, then the
  * highest override among its tags, then the default.
  */

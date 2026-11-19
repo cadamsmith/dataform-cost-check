@@ -7,6 +7,7 @@ import {
   monthlyCost,
   monthlyDelta,
   runsPerDayFor,
+  pricePerTibFor,
 } from "../src/index.ts";
 import type { Config } from "../src/index.ts";
 
@@ -89,5 +90,24 @@ describe("exceedsLimit", () => {
 
   it("does not fail on savings", () => {
     expect(exceedsLimit(-500, 0)).toBe(false);
+  });
+});
+
+describe("pricePerTibFor", () => {
+  const config = {
+    ...DEFAULT_CONFIG,
+    pricePerTib: 6.25,
+    pricePerTibByLocation: { EU: 7, "asia-northeast1": 8 },
+  };
+
+  it("uses the location's price, matched without regard to case", () => {
+    expect(pricePerTibFor({ location: "eu" }, config)).toBe(7);
+    expect(pricePerTibFor({ location: "ASIA-NORTHEAST1" }, config)).toBe(8);
+  });
+
+  it("falls back to price_per_tib for other or unset locations", () => {
+    expect(pricePerTibFor({ location: "US" }, config)).toBe(6.25);
+    expect(pricePerTibFor({}, config)).toBe(6.25);
+    expect(pricePerTibFor({ location: "EU" }, DEFAULT_CONFIG)).toBe(6.25);
   });
 });

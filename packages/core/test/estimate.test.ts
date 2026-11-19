@@ -272,3 +272,19 @@ describe("new upstream tables", () => {
     expect(readsNewTarget("SELECT * FROM `p.d.self`", "p.d.self", targets)).toBeUndefined();
   });
 });
+
+describe("region pricing", () => {
+  it("prices a model at its location's price", async () => {
+    const base = model({ name: "t", query: "old", location: "asia-northeast1" });
+    const head = model({ name: "t", query: "new", location: "asia-northeast1" });
+    const runner = new FakeDryRunner([
+      ["old", { bytes: 0 }],
+      ["new", { bytes: BYTES_PER_TIB }],
+    ]);
+    const e = await estimateChange({ kind: "modified", target: base.target, base, head }, runner, {
+      ...config,
+      pricePerTibByLocation: { "asia-northeast1": 10 },
+    });
+    expect(e).toMatchObject({ monthlyDelta: 300 });
+  });
+});

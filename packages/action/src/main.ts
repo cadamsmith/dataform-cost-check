@@ -10,7 +10,7 @@ import {
 } from "@dataform-cost-check/core";
 import type { Model } from "@dataform-cost-check/core";
 import { loadModels } from "@dataform-cost-check/dataform";
-import { linkDependencies, resolveBaseRef, withBaseWorktree } from "./base-checkout.ts";
+import { copyDependencies, resolveBaseRef, withBaseWorktree } from "./base-checkout.ts";
 import { parseConfig } from "./config.ts";
 import { readPullRequestContext, upsertStickyComment } from "./pr-comment.ts";
 import { dryRunFailure, failureDetails, partitionFilterFailure, runCheck } from "./run.ts";
@@ -71,7 +71,7 @@ async function main(): Promise<void> {
           const baseProject = join(dir, projectDir);
           // The base checkout is a fresh directory. Reuse the dependencies installed at
           // head rather than downloading them again.
-          await linkDependencies(resolve(repoDir, projectDir), baseProject);
+          await copyDependencies(resolve(repoDir, projectDir), baseProject);
           return loadModels({ projectDir: baseProject, overrides });
         });
 

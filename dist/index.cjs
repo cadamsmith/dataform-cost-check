@@ -5202,8 +5202,8 @@ var require_formdata_parser = __commonJS({
         return false;
       }
       for (let i2 = 0; i2 < length; ++i2) {
-        const cp = boundary.charCodeAt(i2);
-        if (!(cp >= 48 && cp <= 57 || cp >= 65 && cp <= 90 || cp >= 97 && cp <= 122 || cp === 39 || cp === 45 || cp === 95)) {
+        const cp2 = boundary.charCodeAt(i2);
+        if (!(cp2 >= 48 && cp2 <= 57 || cp2 >= 65 && cp2 <= 90 || cp2 >= 97 && cp2 <= 122 || cp2 === 39 || cp2 === 45 || cp2 === 95)) {
           return false;
         }
       }
@@ -46301,12 +46301,12 @@ async function withBaseWorktree(repoDir, ref, fn) {
     );
   }
 }
-async function linkDependencies(headProject, baseProject) {
+async function copyDependencies(headProject, baseProject) {
   const headModules = (0, import_node_path3.join)(headProject, "node_modules");
   const baseModules = (0, import_node_path3.join)(baseProject, "node_modules");
   if (!(0, import_node_fs3.existsSync)((0, import_node_path3.join)(baseProject, "package.json"))) return;
   if ((0, import_node_fs3.existsSync)(baseModules) || !(0, import_node_fs3.existsSync)(headModules)) return;
-  await (0, import_promises.symlink)(headModules, baseModules, "dir");
+  await (0, import_promises.cp)(headModules, baseModules, { recursive: true, verbatimSymlinks: true });
 }
 
 // src/config.ts
@@ -46508,7 +46508,7 @@ async function main() {
   const repoDir = process.cwd();
   const load = (side) => side === "head" ? loadModels({ projectDir: (0, import_node_path4.resolve)(repoDir, projectDir), overrides }) : withBaseWorktree(repoDir, baseRef, async (dir) => {
     const baseProject = (0, import_node_path4.join)(dir, projectDir);
-    await linkDependencies((0, import_node_path4.resolve)(repoDir, projectDir), baseProject);
+    await copyDependencies((0, import_node_path4.resolve)(repoDir, projectDir), baseProject);
     return loadModels({ projectDir: baseProject, overrides });
   });
   const { report, comment, summary: summary2, full } = await runCheck({

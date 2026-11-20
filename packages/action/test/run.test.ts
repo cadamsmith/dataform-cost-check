@@ -87,6 +87,14 @@ describe("dryRunFailure", () => {
     expect(message).not.toContain("secret_table");
   });
 
+  it("blames project setup only for failures that point at it", () => {
+    expect(dryRunFailure(report([failed]))).toContain("Check the Google Cloud project");
+    const rejected = { ...failed, errorKind: "query-error" } as const;
+    const message = dryRunFailure(report([rejected]));
+    expect(message).not.toContain("Check the Google Cloud project");
+    expect(message).toContain("BigQuery's message is in the job log.");
+  });
+
   it("passes when at least one dry run succeeded", () => {
     expect(dryRunFailure(report([failed, estimated]))).toBeUndefined();
   });

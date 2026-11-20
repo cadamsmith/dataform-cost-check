@@ -94,7 +94,9 @@ reports "not estimated" with a reason.
   names that table and says it can be estimated once the table exists. Only direct reads
   are caught: a query that reaches the new table through a new view keeps BigQuery's error.
 - **Every dry run fails.** The check fails when every changed model that needed a dry run
-  came back not estimated, and quotes the first error (`action.dryRunFailure`). That
+  came back not estimated, and quotes the first error (`action.dryRunFailure`). It
+  points at project setup only when that error is about permissions, a disabled API or
+  unknown; a rejected query or a missing table points to the job log instead. That
   pattern usually means a misconfigured project (no `bigquery.jobs.create`, the API
   disabled, a wrong project ID), and passing green would hide it. Chosen in #13. Models that
   read a table the same PR creates are left out of the count, since their failure is

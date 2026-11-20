@@ -98,10 +98,15 @@ reports "not estimated" with a reason.
   pattern usually means a misconfigured project (no `bigquery.jobs.create`, the API
   disabled, a wrong project ID), and passing green would hide it. Chosen in #13. Models that
   read a table the same PR creates are left out of the count, since their failure is
-  expected and explained (this was the rule's first known false failure). Remaining known
-  false failure: a table with
-  `requirePartitionFilter` rejects a dry run without that filter, so a PR whose only
-  change drops it is reported as a misconfigured project rather than as the real cause.
+  expected and explained (this was the rule's first known false failure).
+- **Required partition filter dropped.** A table with `requirePartitionFilter` rejects a
+  query without that filter, so a head dry run fails while base passed. The query would
+  fail in production too, so the check fails with that reason, naming the model
+  (`action.partitionFilterFailure`), instead of blaming project setup. These models are
+  left out of the "every dry run fails" count. A base dry run failing this way is not the
+  change's fault and stays an ordinary failure. Detected from BigQuery's message ("without
+  a filter over column"), the one error kind with no reason code of its own; the column
+  name stays in the job log. Chosen 2026-11-20 (milestone 2, #2).
 - **No query text in the comment.** The comment carries model names, bytes and
   estimates, never query text. That includes BigQuery's error messages, which can quote
   string literals and identifiers from the compiled SQL, and on a public repository the

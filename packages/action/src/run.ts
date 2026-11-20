@@ -1,4 +1,9 @@
-import { diffModels, estimateChanges, renderComment } from "@dataform-cost-check/core";
+import {
+  diffModels,
+  estimateChanges,
+  PARTITION_FILTER_REQUIRED_REASON,
+  renderComment,
+} from "@dataform-cost-check/core";
 import type { Config, DryRunner, Model, Report } from "@dataform-cost-check/core";
 
 export interface RunDeps {
@@ -46,7 +51,9 @@ export async function runCheck(deps: RunDeps): Promise<RunResult> {
  */
 export function dryRunFailure(report: Report): string | undefined {
   const tried = report.estimates.filter(
-    (e) => e.status !== "skipped" && !(e.status === "unestimable" && e.newUpstream !== undefined),
+    (e) =>
+      e.status !== "skipped" &&
+      !(e.status === "unestimable" && (e.newUpstream !== undefined || dropsRequiredFilter(e))),
   );
   const failed = tried.filter((e) => e.status === "unestimable");
   const first = failed[0];
@@ -54,6 +61,24 @@ export function dryRunFailure(report: Report): string | undefined {
   return (
     `No changed model could be estimated (${String(failed.length)} tried). ` +
     `Check the Google Cloud project and permissions. First error, for ${first.name}: ${first.reason}`
+  );
+}
+
+/** A head dry run rejected for a missing required partition filter, where base passed. */
+function dropsRequiredFilter(e: Report["estimates"][number]): boolean {
+  return e.status === "unestimable" && e.reason.startsWith(PARTITION_FILTER_REQUIRED_REASON);
+}
+
+/**
+ * Why the run should fail because the change would break in production: it leaves a
+ * query without the partition filter its table requires. Undefined when none does.
+ */
+export function partitionFilterFailure(report: Report): string | undefined {
+  const names = report.estimates.filter(dropsRequiredFilter).map((e) => e.name);
+  if (names.length === 0) return undefined;
+  return (
+    `${names.join(", ")}: reads a table that requires a partition filter, and this change ` +
+    "leaves the query without one, so it would fail when it runs."
   );
 }
 

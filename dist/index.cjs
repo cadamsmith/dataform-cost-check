@@ -45823,6 +45823,7 @@ var ERROR_KIND_TEXT = {
   "query-error": "BigQuery rejected the query",
   unknown: "the dry run returned an error"
 };
+var PARTITION_FILTER_REQUIRED_REASON = "Reads a table that requires a partition filter, and this change leaves the query without one, so it would fail when it runs. This fails the check.";
 function dryRunFailed(side, result) {
   return {
     status: "unestimable",
@@ -45880,6 +45881,15 @@ async function estimateChange(change, runner, config, newTargets = /* @__PURE__ 
         errorKind: headResult.errorKind,
         detail: headResult.error,
         newUpstream: upstream
+      };
+    }
+    if (headResult.errorKind === "partition-filter-required") {
+      return {
+        status: "unestimable",
+        ...common,
+        reason: `${PARTITION_FILTER_REQUIRED_REASON} BigQuery's message is in the job log.`,
+        errorKind: headResult.errorKind,
+        detail: headResult.error
       };
     }
     return { ...common, ...dryRunFailed("head", headResult) };
@@ -46379,12 +46389,20 @@ async function runCheck(deps) {
 }
 function dryRunFailure(report) {
   const tried = report.estimates.filter(
-    (e2) => e2.status !== "skipped" && !(e2.status === "unestimable" && e2.newUpstream !== void 0)
+    (e2) => e2.status !== "skipped" && !(e2.status === "unestimable" && (e2.newUpstream !== void 0 || dropsRequiredFilter(e2)))
   );
   const failed = tried.filter((e2) => e2.status === "unestimable");
   const first = failed[0];
   if (first === void 0 || failed.length < tried.length) return void 0;
   return `No changed model could be estimated (${String(failed.length)} tried). Check the Google Cloud project and permissions. First error, for ${first.name}: ${first.reason}`;
+}
+function dropsRequiredFilter(e2) {
+  return e2.status === "unestimable" && e2.reason.startsWith(PARTITION_FILTER_REQUIRED_REASON);
+}
+function partitionFilterFailure(report) {
+  const names = report.estimates.filter(dropsRequiredFilter).map((e2) => e2.name);
+  if (names.length === 0) return void 0;
+  return `${names.join(", ")}: reads a table that requires a partition filter, and this change leaves the query without one, so it would fail when it runs.`;
 }
 function failureDetails(report) {
   return report.estimates.flatMap(
@@ -46439,7 +46457,7 @@ async function main() {
       "limit_monthly is set, but every estimated model is priced at 0 per TiB, so the limit cannot apply."
     );
   }
-  const failure = dryRunFailure(report);
+  const failure = partitionFilterFailure(report) ?? dryRunFailure(report);
   if (failure !== void 0) {
     setFailed(failure);
   } else if (report.overLimit) {

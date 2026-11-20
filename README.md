@@ -71,6 +71,8 @@ jobs:
           workload_identity_provider: projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/POOL_ID/providers/PROVIDER_ID
           service_account: dataform-cost-check@PROJECT_ID.iam.gserviceaccount.com
       - run: npm install -g @dataform/cli
+      # Only if the project has a package.json (pins @dataform/core):
+      # - run: npm ci
       - uses: cadamsmith/dataform-cost-check@v1
         with:
           config-path: dataform-cost-check.yml

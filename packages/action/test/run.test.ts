@@ -1,7 +1,7 @@
 import { BYTES_PER_TIB, DEFAULT_CONFIG, FakeDryRunner } from "@dataform-cost-check/core";
 import type { Model, Report } from "@dataform-cost-check/core";
 import { describe, expect, it } from "vitest";
-import { dryRunFailure, runCheck } from "../src/run.ts";
+import { dryRunFailure, failureDetails, runCheck } from "../src/run.ts";
 
 const base: Model = {
   target: "proj.analytics.orders_daily",
@@ -27,6 +27,22 @@ describe("runCheck", () => {
     expect(report.totalMonthlyDelta).toBeCloseTo(225);
     expect(comment).toContain("+$225.00 / month");
   });
+
+  it("keeps BigQuery's message out of the comment", async () => {
+    const { report, comment } = await runCheck({
+      config: DEFAULT_CONFIG,
+      loadModels: (side) => Promise.resolve(side === "base" ? [base] : [head]),
+      runner: new FakeDryRunner([[base.query, { bytes: 1024 }]], {
+        error: "Syntax error: Unclosed string literal 'secret-customer-id'",
+        errorKind: "query-error",
+      }),
+    });
+    expect(comment).not.toContain("secret-customer-id");
+    expect(dryRunFailure(report)).not.toContain("secret-customer-id");
+    expect(failureDetails(report)).toEqual([
+      "orders_daily: Syntax error: Unclosed string literal 'secret-customer-id'",
+    ]);
+  });
 });
 
 describe("dryRunFailure", () => {
@@ -44,7 +60,9 @@ describe("dryRunFailure", () => {
     ...common,
     name: "bad",
     status: "unestimable",
-    reason: "Access Denied",
+    reason: "Dry run at head failed: permission denied. BigQuery's message is in the job log.",
+    errorKind: "permission-denied",
+    detail: "Access Denied: Table p:d.secret_table",
   } as const;
   const skipped = {
     ...common,
@@ -64,7 +82,8 @@ describe("dryRunFailure", () => {
   it("fails when every dry run failed, quoting the first error", () => {
     const message = dryRunFailure(report([skipped, failed, failed]));
     expect(message).toContain("2 tried");
-    expect(message).toContain("bad: Access Denied");
+    expect(message).toContain("bad: Dry run at head failed: permission denied");
+    expect(message).not.toContain("secret_table");
   });
 
   it("passes when at least one dry run succeeded", () => {

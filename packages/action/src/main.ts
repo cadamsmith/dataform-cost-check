@@ -8,7 +8,7 @@ import { loadModels } from "@dataform-cost-check/dataform";
 import { resolveBaseRef, withBaseWorktree } from "./base-checkout.ts";
 import { parseConfig } from "./config.ts";
 import { readPullRequestContext, upsertStickyComment } from "./pr-comment.ts";
-import { dryRunFailure, runCheck } from "./run.ts";
+import { dryRunFailure, failureDetails, runCheck } from "./run.ts";
 
 /** Dry runs in flight at once, to stay under BigQuery's rate limits on large PRs. */
 const MAX_CONCURRENT_DRY_RUNS = 4;
@@ -65,6 +65,11 @@ async function main(): Promise<void> {
   });
 
   core.info(comment);
+  // Plain log lines, not warnings: annotations show up on the pull request.
+  const details = failureDetails(report);
+  if (details.length > 0) {
+    core.info(["BigQuery's messages for the dry runs that failed:", ...details].join("\n"));
+  }
   await core.summary.addRaw(comment).write();
   core.setOutput("monthly-delta", report.totalMonthlyDelta.toFixed(2));
   core.setOutput("over-limit", String(report.overLimit));

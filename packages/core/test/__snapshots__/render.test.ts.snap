@@ -41,7 +41,7 @@ This change adds an estimated **+$6,750.92 / month**. :x: Over the $100.00 limit
 **Not estimated**
 
 - \`orders_v\` (modified): Views cost nothing to create; the cost lands on whatever reads them.
-- \`new_rollup\` (added): Dry run at head failed: Not found: Table proj:analytics.new_upstream
+- \`new_rollup\` (added): Dry run at head failed: BigQuery rejected the query. BigQuery's message is in the job log.
 
 <sub>Estimates are upper bounds from BigQuery dry runs, priced at $6.25 per TiB on-demand, with no free-tier deduction. If this project uses slot-based (Editions) pricing, bytes scanned do not map to dollars and these figures do not apply.</sub>
 "
@@ -56,7 +56,7 @@ None of the changed models were estimated.
 **Not estimated**
 
 - \`orders_v\` (modified): Views cost nothing to create; the cost lands on whatever reads them.
-- \`new_rollup\` (added): Dry run at head failed: Not found: Table proj:analytics.new_upstream
+- \`new_rollup\` (added): Dry run at head failed: BigQuery rejected the query. BigQuery's message is in the job log.
 
 <sub>Estimates are upper bounds from BigQuery dry runs, priced at $6.25 per TiB on-demand, with no free-tier deduction. If this project uses slot-based (Editions) pricing, bytes scanned do not map to dollars and these figures do not apply.</sub>
 "

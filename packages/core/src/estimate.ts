@@ -1,6 +1,7 @@
 import { exceedsLimit, monthlyDelta, pricePerTibFor, runsPerDayFor } from "./pricing.ts";
 import type {
   Config,
+  DryRunErrorKind,
   DryRunResult,
   DryRunner,
   Estimate,
@@ -16,6 +17,30 @@ export const PARTITION_JUMP_RATIO = 10;
 export const PARTITION_JUMP_MIN_BYTES = 2 ** 30;
 
 type DryRunBytes = Extract<DryRunResult, { bytes: number }>;
+type DryRunError = Extract<DryRunResult, { error: string }>;
+
+/**
+ * What the comment says about each kind of dry run failure. BigQuery's own message can
+ * quote the query, so it goes to the job log only (docs/design.md, "No query text").
+ */
+export const ERROR_KIND_TEXT: Readonly<Record<DryRunErrorKind, string>> = {
+  "permission-denied": "permission denied",
+  "api-disabled": "the BigQuery API is not enabled in the dry-run project",
+  "not-found": "a table or dataset it reads was not found",
+  "partition-filter-required":
+    "a table it reads requires a partition filter and the query has none, so it would also fail when it runs",
+  "query-error": "BigQuery rejected the query",
+  unknown: "the dry run returned an error",
+};
+
+function dryRunFailed(side: "base" | "head", result: DryRunError) {
+  return {
+    status: "unestimable",
+    reason: `Dry run at ${side} failed: ${ERROR_KIND_TEXT[result.errorKind]}. BigQuery's message is in the job log.`,
+    errorKind: result.errorKind,
+    detail: result.error,
+  } as const;
+}
 
 /**
  * The partition-filter heuristic (docs/design.md, "Partition filter detection"): both
@@ -97,11 +122,7 @@ export async function estimateChange(
   ]);
 
   if ("error" in baseResult) {
-    return {
-      status: "unestimable",
-      ...common,
-      reason: `Dry run at base failed: ${baseResult.error}`,
-    };
+    return { ...common, ...dryRunFailed("base", baseResult) };
   }
   if ("error" in headResult) {
     const upstream =
@@ -113,14 +134,12 @@ export async function estimateChange(
         status: "unestimable",
         ...common,
         reason: `Reads \`${upstream}\`, which this pull request creates, so it can only be estimated once that table exists.`,
+        errorKind: headResult.errorKind,
+        detail: headResult.error,
         newUpstream: upstream,
       };
     }
-    return {
-      status: "unestimable",
-      ...common,
-      reason: `Dry run at head failed: ${headResult.error}`,
-    };
+    return { ...common, ...dryRunFailed("head", headResult) };
   }
 
   const runsPerDay = runsPerDayFor(model, config);

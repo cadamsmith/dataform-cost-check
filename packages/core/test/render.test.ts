@@ -51,7 +51,10 @@ const broken: Estimate = {
   name: "new_rollup",
   kind: "added",
   type: "table",
-  reason: "Dry run at head failed: Not found: Table proj:analytics.new_upstream",
+  reason:
+    "Dry run at head failed: BigQuery rejected the query. BigQuery's message is in the job log.",
+  errorKind: "query-error",
+  detail: "Syntax error: Unclosed string literal 'secret-customer-id' at [3:14]",
 };
 
 function report(overrides: Partial<Report>): Report {
@@ -66,6 +69,12 @@ function report(overrides: Partial<Report>): Report {
 }
 
 describe("renderComment", () => {
+  it("never renders BigQuery's message, which can quote the query", () => {
+    const comment = renderComment(report({ estimates: [broken] }));
+    expect(comment).not.toContain("secret-customer-id");
+    expect(comment).toContain("BigQuery rejected the query");
+  });
+
   it("renders an increase over the limit with every kind of row", () => {
     expect(
       renderComment(

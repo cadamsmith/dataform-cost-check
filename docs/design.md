@@ -102,6 +102,15 @@ reports "not estimated" with a reason.
   false failure: a table with
   `requirePartitionFilter` rejects a dry run without that filter, so a PR whose only
   change drops it is reported as a misconfigured project rather than as the real cause.
+- **No query text in the comment.** The comment carries model names, bytes and
+  estimates, never query text. That includes BigQuery's error messages, which can quote
+  string literals and identifiers from the compiled SQL, and on a public repository the
+  comment is public. The runner sorts each failed dry run into a kind
+  (`DryRunErrorKind`: permission denied, API not enabled, not found, required partition
+  filter missing, query error, unknown) from the HTTP status and BigQuery's error reasons
+  (`bigquery.classifyError`). The comment and the "every dry run fails" message name the
+  kind; BigQuery's message goes to the job log only (`action.failureDetails`), as plain
+  log lines rather than warnings, since annotations show on the pull request. Chosen in #24.
 - **Views.** Creating a view costs nothing; the cost lands on whatever reads it. Views are
   skipped with that reason.
 - **Assertions, operations, pre/post operations.** Decide per type: estimate, skip, or

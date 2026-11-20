@@ -1,5 +1,5 @@
 import { GoogleAuth } from "google-auth-library";
-import type { DryRunResult, DryRunner } from "@dataform-cost-check/core";
+import type { DryRunErrorKind, DryRunResult, DryRunner } from "@dataform-cost-check/core";
 
 const BIGQUERY_SCOPE = "https://www.googleapis.com/auth/bigquery";
 const API_ROOT = "https://bigquery.googleapis.com/bigquery/v2";
@@ -31,7 +31,36 @@ interface JobResponse {
       readonly referencedTables?: readonly TableReference[];
     };
   };
-  readonly error?: { readonly message?: string };
+  readonly error?: ApiError;
+}
+
+/** The parts of a Google API error body this runner reads. */
+interface ApiError {
+  readonly message?: string;
+  readonly errors?: readonly { readonly reason?: string }[];
+  readonly details?: readonly { readonly reason?: string }[];
+}
+
+/**
+ * Sort a failed dry run into a kind the PR comment can name without quoting BigQuery's
+ * message, which can contain parts of the query. Uses the HTTP status and the error
+ * reasons; only the required-partition-filter case has no reason of its own, so it is
+ * matched on the message.
+ */
+export function classifyError(status: number, error: ApiError | undefined): DryRunErrorKind {
+  const reasons = [...(error?.errors ?? []), ...(error?.details ?? [])].map((e) => e.reason);
+  if (reasons.includes("accessNotConfigured") || reasons.includes("SERVICE_DISABLED")) {
+    return "api-disabled";
+  }
+  if (/without a filter over column/i.test(error?.message ?? "")) {
+    return "partition-filter-required";
+  }
+  if (status === 404 || reasons.includes("notFound")) return "not-found";
+  if (status === 403 || reasons.includes("accessDenied")) return "permission-denied";
+  if (status === 400 || reasons.includes("invalidQuery") || reasons.includes("invalid")) {
+    return "query-error";
+  }
+  return "unknown";
 }
 
 function applicationDefaultToken(): () => Promise<string> {
@@ -92,12 +121,15 @@ export class BigQueryDryRunner implements DryRunner {
       if (response.status === 401 || response.status === 429 || response.status >= 500) {
         throw new Error(`BigQuery dry run failed: ${message}`);
       }
-      return { error: message };
+      return { error: message, errorKind: classifyError(response.status, job.error) };
     }
 
     const bytes = job.statistics?.totalBytesProcessed ?? job.statistics?.query?.totalBytesProcessed;
     if (bytes === undefined || !/^\d+$/.test(bytes)) {
-      return { error: "BigQuery returned no bytes-processed figure for the dry run." };
+      return {
+        error: "BigQuery returned no bytes-processed figure for the dry run.",
+        errorKind: "unknown",
+      };
     }
     const partitionedTables = await this.#partitionedTables(
       job.statistics?.query?.referencedTables ?? [],

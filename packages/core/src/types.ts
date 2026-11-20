@@ -48,7 +48,27 @@ export type DryRunResult =
        */
       readonly partitionedTables?: readonly string[] | undefined;
     }
-  | { readonly error: string };
+  | {
+      /**
+       * BigQuery's own message. It can quote the query (string literals, identifiers), so
+       * it goes to the job log only, never into the PR comment.
+       */
+      readonly error: string;
+      /** What kind of failure it was, safe to show in the comment. */
+      readonly errorKind: DryRunErrorKind;
+    };
+
+/**
+ * Why a dry run failed, as far as the comment is concerned. The comment names the kind
+ * and points to the job log for BigQuery's message (docs/design.md, "No query text").
+ */
+export type DryRunErrorKind =
+  | "permission-denied"
+  | "api-disabled"
+  | "not-found"
+  | "partition-filter-required"
+  | "query-error"
+  | "unknown";
 
 /**
  * The only seam to BigQuery. `packages/bigquery` implements it against the API;
@@ -106,6 +126,13 @@ export type Estimate =
       readonly kind: ChangeKind;
       readonly type: ModelType;
       readonly reason: string;
+      /** The dry run failure behind it, when there was one. */
+      readonly errorKind?: DryRunErrorKind;
+      /**
+       * BigQuery's message, for the job log only. Never rendered into the comment: it can
+       * quote the query.
+       */
+      readonly detail?: string;
       /**
        * Set when the failure is explained by the query reading a table that the same pull
        * request creates, which does not exist yet: that table's target.

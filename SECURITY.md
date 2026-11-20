@@ -27,7 +27,7 @@ query, go to the job log only.
 
 ## Verifying what you run
 
-- **Pin a full commit SHA**, not a tag: `uses: cadamsmith/dataform-cost-check@<40-character SHA> # v0.1.0`.
+- **Pin a full commit SHA**, not a tag: `uses: cadamsmith/dataform-cost-check@<40-character SHA> # v0.2.0`.
   Tags can move; a SHA cannot.
 - **The bundled code matches the source.** `dist/index.cjs` is built from `packages/` with
   `pnpm build`, and CI fails any change where the committed `dist/` differs from a fresh build.

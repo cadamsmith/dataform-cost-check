@@ -432,3 +432,19 @@ describe("unique-key incremental models", () => {
     expect(e).toMatchObject({ status: "estimated", merge: { partitionFiltered: false } });
   });
 });
+
+describe("built-in list prices in the report", () => {
+  it("records the list prices used, by location, with their date", async () => {
+    const m = model({ name: "eu", query: "q", location: "europe-west2" });
+    const report = await estimateChanges(
+      [{ kind: "added", target: m.target, head: m }],
+      new FakeDryRunner([["q", { bytes: BYTES_PER_TIB }]]),
+      { ...config, builtInRegionPrices: true },
+    );
+    expect(report.listPrices).toEqual({
+      asOf: "2026-11-20",
+      byLocation: { "europe-west2": 7.8125 },
+    });
+    expect(report.estimates[0]).toMatchObject({ pricePerTib: 7.8125, location: "europe-west2" });
+  });
+});

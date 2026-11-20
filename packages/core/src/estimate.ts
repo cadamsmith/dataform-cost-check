@@ -1,4 +1,11 @@
-import { exceedsLimit, monthlyDelta, pricePerTibFor, runsPerDayFor } from "./pricing.ts";
+import {
+  exceedsLimit,
+  listPriceFor,
+  monthlyDelta,
+  pricePerTibFor,
+  runsPerDayFor,
+} from "./pricing.ts";
+import { ON_DEMAND_PRICES_AS_OF } from "./region-prices.ts";
 import { formatBytes } from "./render.ts";
 import type {
   Config,
@@ -217,6 +224,7 @@ export async function estimateChange(
   return {
     status: "estimated",
     ...common,
+    ...(model.location !== undefined && { location: model.location }),
     baseBytes: baseResult.bytes,
     headBytes: headResult.bytes,
     runsPerDay,
@@ -255,6 +263,19 @@ export function limitCannotApply(report: Report): boolean {
   );
 }
 
+/** The built-in list prices the estimates used, by location, for the comment's footer. */
+function listPrices(estimates: readonly Estimate[], config: Config): Pick<Report, "listPrices"> {
+  const byLocation: Record<string, number> = {};
+  for (const e of estimates) {
+    if (e.status !== "estimated") continue;
+    const price = listPriceFor(e.location, config);
+    if (price !== undefined && e.location !== undefined) byLocation[e.location] = price;
+  }
+  return Object.keys(byLocation).length === 0
+    ? {}
+    : { listPrices: { asOf: ON_DEMAND_PRICES_AS_OF, byLocation } };
+}
+
 /** Total the estimates and apply the limit. Pure. */
 export function buildReport(estimates: readonly Estimate[], config: Config): Report {
   const totalMonthlyDelta = estimates.reduce(
@@ -268,6 +289,7 @@ export function buildReport(estimates: readonly Estimate[], config: Config): Rep
     ...(config.pricePerTibByLocation !== undefined && {
       pricePerTibByLocation: config.pricePerTibByLocation,
     }),
+    ...listPrices(estimates, config),
     limitMonthly: config.limitMonthly,
     overLimit: exceedsLimit(totalMonthlyDelta, config.limitMonthly),
   };

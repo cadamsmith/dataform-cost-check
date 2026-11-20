@@ -322,3 +322,14 @@ describe("renderComment pricing footer", () => {
     expect(body).toContain("priced at $6.25 per TiB on-demand ($7.50 in asia-northeast1),");
   });
 });
+
+describe("renderComment with built-in list prices", () => {
+  it("names Google's list price and its date in the footer", () => {
+    const body = renderComment(
+      report({ listPrices: { asOf: "2026-11-20", byLocation: { "europe-west2": 7.8125 } } }),
+    );
+    expect(body).toContain(
+      "priced at Google's on-demand list price for each location as of 2026-11-20 ($7.81 per TiB in europe-west2; otherwise $6.25 per TiB on-demand),",
+    );
+  });
+});

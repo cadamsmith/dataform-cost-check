@@ -1,5 +1,6 @@
 export type * from "./types.ts";
 export * from "./pricing.ts";
+export * from "./region-prices.ts";
 export * from "./diff.ts";
 export * from "./estimate.ts";
 export * from "./render.ts";

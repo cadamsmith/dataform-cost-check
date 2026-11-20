@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   BYTES_PER_TIB,
   DEFAULT_CONFIG,
+  ON_DEMAND_PRICE_PER_TIB,
   bytesToTib,
   exceedsLimit,
   monthlyCost,
@@ -109,5 +110,30 @@ describe("pricePerTibFor", () => {
     expect(pricePerTibFor({ location: "US" }, config)).toBe(6.25);
     expect(pricePerTibFor({}, config)).toBe(6.25);
     expect(pricePerTibFor({ location: "EU" }, DEFAULT_CONFIG)).toBe(6.25);
+  });
+});
+
+describe("built-in region prices", () => {
+  const listed = { ...DEFAULT_CONFIG, builtInRegionPrices: true };
+
+  it("prices a model at Google's list price for its location, any case", () => {
+    expect(pricePerTibFor({ location: "europe-west2" }, listed)).toBe(7.8125);
+    expect(pricePerTibFor({ location: "us" }, listed)).toBe(6.25);
+    expect(pricePerTibFor({ location: "southamerica-east1" }, listed)).toBe(11.25);
+  });
+
+  it("lets the team's own prices win, and falls back for unknown or unset locations", () => {
+    const own = { ...listed, pricePerTibByLocation: { "europe-west2": 5 } };
+    expect(pricePerTibFor({ location: "europe-west2" }, own)).toBe(5);
+    expect(
+      pricePerTibFor({ location: "europe-west2" }, { ...listed, builtInRegionPrices: false }),
+    ).toBe(6.25);
+    expect(pricePerTibFor({ location: "mars-north1" }, listed)).toBe(6.25);
+    expect(pricePerTibFor({}, listed)).toBe(6.25);
+  });
+
+  it("lists every price as a positive number of dollars", () => {
+    for (const price of Object.values(ON_DEMAND_PRICE_PER_TIB)) expect(price).toBeGreaterThan(0);
+    expect(ON_DEMAND_PRICE_PER_TIB.US).toBe(6.25);
   });
 });

@@ -11,6 +11,8 @@ export interface RunDeps {
   /** Compiled models at the base and head commits. */
   readonly loadModels: (side: "base" | "head") => Promise<Model[]>;
   readonly runner: DryRunner;
+  /** The `project-dir` input, so each Dataform project in a repository keeps its own comment. */
+  readonly projectDir?: string;
 }
 
 export interface RunResult {
@@ -30,14 +32,16 @@ export const SUMMARY_MAX_LENGTH = 900_000;
 export async function runCheck(deps: RunDeps): Promise<RunResult> {
   const [base, head] = await Promise.all([deps.loadModels("base"), deps.loadModels("head")]);
   const report = await estimateChanges(diffModels(base, head), deps.runner, deps.config);
+  const projectDir = deps.projectDir ?? ".";
   return {
     report,
-    comment: renderComment(report),
+    comment: renderComment(report, { projectDir }),
     summary: renderComment(report, {
       maxLength: SUMMARY_MAX_LENGTH,
       fullReportAt: "The job log has the full report.",
+      projectDir,
     }),
-    full: renderComment(report, { maxLength: Number.POSITIVE_INFINITY }),
+    full: renderComment(report, { maxLength: Number.POSITIVE_INFINITY, projectDir }),
   };
 }
 

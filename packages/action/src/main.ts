@@ -3,7 +3,7 @@ import { join, resolve } from "node:path";
 import * as core from "@actions/core";
 import { BigQueryDryRunner } from "@dataform-cost-check/bigquery";
 import {
-  COMMENT_MARKER,
+  commentMarker,
   DEFAULT_CONFIG,
   limitCannotApply,
   limitConcurrency,
@@ -78,6 +78,7 @@ async function main(): Promise<void> {
   const { report, comment, summary, full } = await runCheck({
     config,
     loadModels: load,
+    projectDir,
     runner: limitConcurrency(new BigQueryDryRunner({ projectId }), MAX_CONCURRENT_DRY_RUNS),
   });
 
@@ -90,7 +91,7 @@ async function main(): Promise<void> {
   await core.summary.addRaw(summary).write();
   core.setOutput("monthly-delta", report.totalMonthlyDelta.toFixed(2));
   core.setOutput("over-limit", String(report.overLimit));
-  await postComment(pr, comment);
+  await postComment(pr, comment, projectDir);
 
   if (limitCannotApply(report)) {
     core.warning(
@@ -110,6 +111,7 @@ async function main(): Promise<void> {
 async function postComment(
   pr: Awaited<ReturnType<typeof readPullRequestContext>>,
   body: string,
+  projectDir: string,
 ): Promise<void> {
   const token = core.getInput("github-token");
   if (pr === undefined || !token) {
@@ -121,7 +123,7 @@ async function postComment(
       token,
       pr,
       body,
-      marker: COMMENT_MARKER,
+      marker: commentMarker(projectDir),
       apiUrl: process.env.GITHUB_API_URL,
     });
     core.info(`Comment ${action}: ${url}`);

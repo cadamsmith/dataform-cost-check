@@ -78,13 +78,24 @@ jobs:
           config-path: dataform-cost-check.yml
 ```
 
-| Input          | Default                     | Description                           |
-| -------------- | --------------------------- | ------------------------------------- |
-| `config-path`  | `dataform-cost-check.yml`   | Path to the config file               |
-| `project-dir`  | `.`                         | Directory of the Dataform project     |
-| `project-id`   | the authenticated project   | Google Cloud project for dry runs     |
-| `base-ref`     | the pull request's base SHA | Commit to compare against             |
-| `github-token` | `${{ github.token }}`       | Token used to post the sticky comment |
+| Input              | Default                       | Description                                       |
+| ------------------ | ----------------------------- | ------------------------------------------------- |
+| `config-path`      | `dataform-cost-check.yml`     | Path to the config file                           |
+| `project-dir`      | `.`                           | Directory of the Dataform project                 |
+| `project-id`       | the authenticated project     | Google Cloud project for dry runs                 |
+| `base-ref`         | the pull request's base SHA   | Commit to compare against                         |
+| `default-database` | from `workflow_settings.yaml` | Compile as production: overrides `defaultProject` |
+| `default-schema`   | from `workflow_settings.yaml` | Overrides `defaultDataset`                        |
+| `default-location` | from `workflow_settings.yaml` | Overrides `defaultLocation`                       |
+| `schema-suffix`    | none                          | Release config's schema suffix                    |
+| `table-prefix`     | none                          | Release config's table prefix                     |
+| `vars`             | none                          | Compilation variables, `key=value,key2=value2`    |
+| `github-token`     | `${{ github.token }}`         | Token used to post the sticky comment             |
+
+**Compile as production.** If production runs from a release config with compilation
+overrides (another project, a schema suffix, variables), set the same values in the inputs
+above. Otherwise the check compiles your development settings, and dry runs may read
+datasets that do not exist or use the wrong variable values.
 
 Configuration, in `dataform-cost-check.yml` (see [`dataform-cost-check.example.yml`](dataform-cost-check.example.yml)):
 

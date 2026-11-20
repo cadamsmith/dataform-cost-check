@@ -10,6 +10,41 @@ export interface CompileOptions {
   readonly projectDir: string;
   /** The Dataform CLI to run (the `@dataform/cli` package). Defaults to `dataform` on PATH. */
   readonly command?: string;
+  /**
+   * Compile as production does: the settings a release config overrides. Each unset
+   * value keeps `workflow_settings.yaml`'s.
+   */
+  readonly overrides?: CompileOverrides;
+}
+
+/** The `dataform compile` settings a release config can override. */
+export interface CompileOverrides {
+  readonly defaultDatabase?: string;
+  readonly defaultSchema?: string;
+  readonly defaultLocation?: string;
+  readonly schemaSuffix?: string;
+  readonly tablePrefix?: string;
+  /** `key=value` pairs, comma-separated, as the CLI's `--vars` takes them. */
+  readonly vars?: string;
+}
+
+const OVERRIDE_FLAGS: Readonly<Record<keyof CompileOverrides, string>> = {
+  defaultDatabase: "--default-database",
+  defaultSchema: "--default-schema",
+  defaultLocation: "--default-location",
+  schemaSuffix: "--schema-suffix",
+  tablePrefix: "--table-prefix",
+  vars: "--vars",
+};
+
+/** CLI arguments for `dataform compile`, overrides included. */
+export function compileArgs(overrides: CompileOverrides = {}): string[] {
+  const args = ["compile", "--json"];
+  for (const [key, flag] of Object.entries(OVERRIDE_FLAGS)) {
+    const value = overrides[key as keyof CompileOverrides];
+    if (value) args.push(`${flag}=${value}`);
+  }
+  return args;
 }
 
 /** The subset of `dataform compile --json` output (CLI 3.x) this adapter reads. */
@@ -110,7 +145,7 @@ export async function compileProject(options: CompileOptions): Promise<unknown> 
   }
   let stdout: string;
   try {
-    ({ stdout } = await execFileAsync(command, ["compile", "--json"], {
+    ({ stdout } = await execFileAsync(command, compileArgs(options.overrides), {
       cwd: options.projectDir,
       maxBuffer: 64 * 1024 * 1024,
       // The npm shim on Windows is a .cmd file, which only the shell can run.

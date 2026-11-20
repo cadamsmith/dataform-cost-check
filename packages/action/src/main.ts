@@ -55,16 +55,24 @@ async function main(): Promise<void> {
     : DEFAULT_CONFIG;
   if (!existsSync(configPath)) core.info(`No ${configPath} found; using defaults.`);
 
+  const overrides = {
+    defaultDatabase: core.getInput("default-database"),
+    defaultSchema: core.getInput("default-schema"),
+    defaultLocation: core.getInput("default-location"),
+    schemaSuffix: core.getInput("schema-suffix"),
+    tablePrefix: core.getInput("table-prefix"),
+    vars: core.getInput("vars"),
+  };
   const repoDir = process.cwd();
   const load = (side: "base" | "head"): Promise<Model[]> =>
     side === "head"
-      ? loadModels({ projectDir: resolve(repoDir, projectDir) })
+      ? loadModels({ projectDir: resolve(repoDir, projectDir), overrides })
       : withBaseWorktree(repoDir, baseRef, async (dir) => {
           const baseProject = join(dir, projectDir);
           // The base checkout is a fresh directory. Reuse the dependencies installed at
           // head rather than downloading them again.
           await linkDependencies(resolve(repoDir, projectDir), baseProject);
-          return loadModels({ projectDir: baseProject });
+          return loadModels({ projectDir: baseProject, overrides });
         });
 
   const { report, comment, summary, full } = await runCheck({

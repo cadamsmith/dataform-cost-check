@@ -21,6 +21,30 @@ inputs:
     description: Commit to compare against. Defaults to the pull request's base commit.
     required: false
     default: ""
+  default-database:
+    description: Compile as production does. Overrides defaultProject in workflow_settings.yaml, as a release config would.
+    required: false
+    default: ""
+  default-schema:
+    description: Overrides defaultDataset in workflow_settings.yaml.
+    required: false
+    default: ""
+  default-location:
+    description: Overrides defaultLocation in workflow_settings.yaml.
+    required: false
+    default: ""
+  schema-suffix:
+    description: Suffix for output dataset names, as a release config's schema suffix.
+    required: false
+    default: ""
+  table-prefix:
+    description: Prefix for output table names, as a release config's table prefix.
+    required: false
+    default: ""
+  vars:
+    description: Compilation variables as key=value pairs, comma-separated (dataform compile --vars).
+    required: false
+    default: ""
   github-token:
     description: Token used to post the sticky pull request comment.
     required: false

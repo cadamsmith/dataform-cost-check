@@ -46131,6 +46131,22 @@ var import_node_child_process = require("node:child_process");
 var import_node_fs2 = require("node:fs");
 var import_node_path2 = require("node:path");
 var import_node_util4 = require("node:util");
+var OVERRIDE_FLAGS = {
+  defaultDatabase: "--default-database",
+  defaultSchema: "--default-schema",
+  defaultLocation: "--default-location",
+  schemaSuffix: "--schema-suffix",
+  tablePrefix: "--table-prefix",
+  vars: "--vars"
+};
+function compileArgs(overrides = {}) {
+  const args = ["compile", "--json"];
+  for (const [key, flag] of Object.entries(OVERRIDE_FLAGS)) {
+    const value = overrides[key];
+    if (value) args.push(`${flag}=${value}`);
+  }
+  return args;
+}
 var DataformCliNotFoundError = class extends Error {
   constructor(command) {
     super(`Dataform CLI not found: ${command}. Install it with \`npm install -g @dataform/cli\`.`);
@@ -46180,7 +46196,7 @@ async function compileProject(options) {
   }
   let stdout;
   try {
-    ({ stdout } = await execFileAsync(command, ["compile", "--json"], {
+    ({ stdout } = await execFileAsync(command, compileArgs(options.overrides), {
       cwd: options.projectDir,
       maxBuffer: 64 * 1024 * 1024,
       // The npm shim on Windows is a .cmd file, which only the shell can run.
@@ -46481,11 +46497,19 @@ async function main() {
   info(`Dataform Cost Check (pre-alpha). Base: ${baseRef}. Dry runs in: ${projectId}.`);
   const config = (0, import_node_fs4.existsSync)(configPath) ? parseConfig((0, import_node_fs4.readFileSync)(configPath, "utf8")) : DEFAULT_CONFIG;
   if (!(0, import_node_fs4.existsSync)(configPath)) info(`No ${configPath} found; using defaults.`);
+  const overrides = {
+    defaultDatabase: getInput("default-database"),
+    defaultSchema: getInput("default-schema"),
+    defaultLocation: getInput("default-location"),
+    schemaSuffix: getInput("schema-suffix"),
+    tablePrefix: getInput("table-prefix"),
+    vars: getInput("vars")
+  };
   const repoDir = process.cwd();
-  const load = (side) => side === "head" ? loadModels({ projectDir: (0, import_node_path4.resolve)(repoDir, projectDir) }) : withBaseWorktree(repoDir, baseRef, async (dir) => {
+  const load = (side) => side === "head" ? loadModels({ projectDir: (0, import_node_path4.resolve)(repoDir, projectDir), overrides }) : withBaseWorktree(repoDir, baseRef, async (dir) => {
     const baseProject = (0, import_node_path4.join)(dir, projectDir);
     await linkDependencies((0, import_node_path4.resolve)(repoDir, projectDir), baseProject);
-    return loadModels({ projectDir: baseProject });
+    return loadModels({ projectDir: baseProject, overrides });
   });
   const { report, comment, summary: summary2, full } = await runCheck({
     config,

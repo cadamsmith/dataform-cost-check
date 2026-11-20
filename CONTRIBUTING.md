@@ -15,6 +15,13 @@ pnpm build   # bundle the action into dist/
 pnpm readme  # regenerate the README's sample comment after a change to the comment
 ```
 
+`pnpm install` (or `pnpm run prepare`) turns on a pre-commit hook (`.githooks/pre-commit`) that checks formatting
+and that `dist/` is up to date, so CI does not have to tell you. Skip it once with
+`git commit --no-verify`.
+
+Claude Code users get three project skills in `.claude/skills/`: `release`, `sandbox-check`
+and `demo-deck`.
+
 ## Layout
 
 ```

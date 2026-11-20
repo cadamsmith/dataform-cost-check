@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm, symlink } from "node:fs/promises";
+import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -56,15 +56,18 @@ export async function withBaseWorktree<T>(
 }
 
 /**
- * For a project with a `package.json`, link head's installed `node_modules` into the
+ * For a project with a `package.json`, copy head's installed `node_modules` into the
  * base checkout, so the base compiles without a second install (and without the network).
+ * A copy, not a symlink: the Dataform CLI compiles in a sandbox that will not load
+ * modules through a link that leads outside the project ("Could not find NPM
+ * dependencies", found in the first real GitHub Actions run).
  * Does nothing when base has no `package.json`, already has `node_modules`, or head has
  * none (compiling then reports the missing install).
  */
-export async function linkDependencies(headProject: string, baseProject: string): Promise<void> {
+export async function copyDependencies(headProject: string, baseProject: string): Promise<void> {
   const headModules = join(headProject, "node_modules");
   const baseModules = join(baseProject, "node_modules");
   if (!existsSync(join(baseProject, "package.json"))) return;
   if (existsSync(baseModules) || !existsSync(headModules)) return;
-  await symlink(headModules, baseModules, "dir");
+  await cp(headModules, baseModules, { recursive: true, verbatimSymlinks: true });
 }

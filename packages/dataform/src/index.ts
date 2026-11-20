@@ -1,4 +1,6 @@
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { promisify } from "node:util";
 import type { Model, ModelType } from "@dataform-cost-check/core";
 
@@ -47,6 +49,19 @@ export class DataformCliNotFoundError extends Error {
   }
 }
 
+/**
+ * The project pins `@dataform/core` in a `package.json`, but its dependencies are not
+ * installed. The CLI would only say it "could not find a recent installed version".
+ */
+export class DataformDependenciesMissingError extends Error {
+  constructor(readonly projectDir: string) {
+    super(
+      `${projectDir} has a package.json but no node_modules. Run \`npm ci\` (or \`dataform install\`) in the project directory before Dataform Cost Check.`,
+    );
+    this.name = "DataformDependenciesMissingError";
+  }
+}
+
 /** The project ran through the CLI but did not compile. One `file: message` line per error. */
 export class DataformCompilationError extends Error {
   constructor(readonly errors: readonly CompilationErrorEntry[]) {
@@ -85,6 +100,12 @@ function compilationErrorsIn(stdout: string | undefined): readonly CompilationEr
  */
 export async function compileProject(options: CompileOptions): Promise<unknown> {
   const command = options.command ?? "dataform";
+  if (
+    existsSync(join(options.projectDir, "package.json")) &&
+    !existsSync(join(options.projectDir, "node_modules"))
+  ) {
+    throw new DataformDependenciesMissingError(options.projectDir);
+  }
   let stdout: string;
   try {
     ({ stdout } = await execFileAsync(command, ["compile", "--json"], {

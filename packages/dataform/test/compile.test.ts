@@ -1,7 +1,15 @@
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { DataformCliNotFoundError, compileProject, loadModels } from "../src/index.ts";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+  DataformCliNotFoundError,
+  DataformDependenciesMissingError,
+  compileProject,
+  loadModels,
+} from "../src/index.ts";
 
 const projectDir = fileURLToPath(new URL("../../../fixtures/sample-project", import.meta.url));
 
@@ -19,6 +27,14 @@ describe("compileProject", () => {
     await expect(
       compileProject({ projectDir, command: "dataform-cli-that-does-not-exist" }),
     ).rejects.toThrow(DataformCliNotFoundError);
+  });
+
+  it("asks for an install when a package.json project has no node_modules", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "dcc-pkg-"));
+    writeFileSync(join(dir, "package.json"), "{}");
+    await expect(compileProject({ projectDir: dir })).rejects.toThrow(
+      DataformDependenciesMissingError,
+    );
   });
 
   // Runs only where the Dataform CLI is installed; the parser tests use a saved copy.

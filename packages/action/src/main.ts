@@ -10,7 +10,7 @@ import {
 } from "@dataform-cost-check/core";
 import type { Model } from "@dataform-cost-check/core";
 import { loadModels } from "@dataform-cost-check/dataform";
-import { resolveBaseRef, withBaseWorktree } from "./base-checkout.ts";
+import { linkDependencies, resolveBaseRef, withBaseWorktree } from "./base-checkout.ts";
 import { parseConfig } from "./config.ts";
 import { readPullRequestContext, upsertStickyComment } from "./pr-comment.ts";
 import { dryRunFailure, failureDetails, partitionFilterFailure, runCheck } from "./run.ts";
@@ -59,9 +59,13 @@ async function main(): Promise<void> {
   const load = (side: "base" | "head"): Promise<Model[]> =>
     side === "head"
       ? loadModels({ projectDir: resolve(repoDir, projectDir) })
-      : withBaseWorktree(repoDir, baseRef, (dir) =>
-          loadModels({ projectDir: join(dir, projectDir) }),
-        );
+      : withBaseWorktree(repoDir, baseRef, async (dir) => {
+          const baseProject = join(dir, projectDir);
+          // The base checkout is a fresh directory. Reuse the dependencies installed at
+          // head rather than downloading them again.
+          await linkDependencies(resolve(repoDir, projectDir), baseProject);
+          return loadModels({ projectDir: baseProject });
+        });
 
   const { report, comment, summary, full } = await runCheck({
     config,

@@ -11647,7 +11647,7 @@ var require_dns = __commonJS({
   "../../node_modules/.pnpm/undici@6.29.1/node_modules/undici/lib/interceptor/dns.js"(exports2, module2) {
     "use strict";
     var { isIP: isIP2 } = require("node:net");
-    var { lookup } = require("node:dns");
+    var { lookup: lookup2 } = require("node:dns");
     var DecoratorHandler = require_decorator_handler();
     var { InvalidArgumentError, InformationalError } = require_errors();
     var maxInt = Math.pow(2, 31) - 1;
@@ -11737,7 +11737,7 @@ var require_dns = __commonJS({
         }
       }
       #defaultLookup(origin, opts, cb) {
-        lookup(
+        lookup2(
           origin.hostname,
           {
             all: true,
@@ -30512,12 +30512,12 @@ var require_base64_js = __commonJS({
     exports2.byteLength = byteLength;
     exports2.toByteArray = toByteArray;
     exports2.fromByteArray = fromByteArray;
-    var lookup = [];
+    var lookup2 = [];
     var revLookup = [];
     var Arr = typeof Uint8Array !== "undefined" ? Uint8Array : Array;
     var code = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     for (i2 = 0, len = code.length; i2 < len; ++i2) {
-      lookup[i2] = code[i2];
+      lookup2[i2] = code[i2];
       revLookup[code.charCodeAt(i2)] = i2;
     }
     var i2;
@@ -30570,7 +30570,7 @@ var require_base64_js = __commonJS({
       return arr;
     }
     function tripletToBase64(num) {
-      return lookup[num >> 18 & 63] + lookup[num >> 12 & 63] + lookup[num >> 6 & 63] + lookup[num & 63];
+      return lookup2[num >> 18 & 63] + lookup2[num >> 12 & 63] + lookup2[num >> 6 & 63] + lookup2[num & 63];
     }
     function encodeChunk(uint8, start, end) {
       var tmp;
@@ -30593,12 +30593,12 @@ var require_base64_js = __commonJS({
       if (extraBytes === 1) {
         tmp = uint8[len2 - 1];
         parts.push(
-          lookup[tmp >> 2] + lookup[tmp << 4 & 63] + "=="
+          lookup2[tmp >> 2] + lookup2[tmp << 4 & 63] + "=="
         );
       } else if (extraBytes === 2) {
         tmp = (uint8[len2 - 2] << 8) + uint8[len2 - 1];
         parts.push(
-          lookup[tmp >> 10] + lookup[tmp >> 4 & 63] + lookup[tmp << 2 & 63] + "="
+          lookup2[tmp >> 10] + lookup2[tmp >> 4 & 63] + lookup2[tmp << 2 & 63] + "="
         );
       }
       return parts.join("");
@@ -45783,12 +45783,12 @@ var BigQueryDryRunner = class {
     const checked = await Promise.all(
       ids.map(async (parts) => {
         const id = parts.join(".");
-        let lookup = this.#partitioned.get(id);
-        if (lookup === void 0) {
-          lookup = this.#isPartitioned(...parts);
-          this.#partitioned.set(id, lookup);
+        let lookup2 = this.#partitioned.get(id);
+        if (lookup2 === void 0) {
+          lookup2 = this.#isPartitioned(...parts);
+          this.#partitioned.set(id, lookup2);
         }
-        return await lookup === true ? [id] : [];
+        return await lookup2 === true ? [id] : [];
       })
     );
     return checked.flat();
@@ -45809,11 +45809,73 @@ var BigQueryDryRunner = class {
   }
 };
 
+// ../core/src/region-prices.ts
+var ON_DEMAND_PRICE_PER_TIB = {
+  EU: 6.25,
+  US: 6.25,
+  "africa-south1": 7.5,
+  "asia-east1": 7.1875,
+  "asia-east2": 8.75,
+  "asia-northeast1": 7.5,
+  "asia-northeast2": 7.5,
+  "asia-northeast3": 7.5,
+  "asia-south1": 7.5,
+  "asia-south2": 7.5,
+  "asia-southeast1": 8.4375,
+  "asia-southeast2": 7.5,
+  "asia-southeast3": 7.5,
+  "asia-southeast4": 6.5625,
+  "australia-southeast1": 8.125,
+  "australia-southeast2": 8.125,
+  "aws-ap-northeast-2": 10,
+  "aws-ap-southeast-2": 10.5469,
+  "aws-eu-central-1": 10.1563,
+  "aws-eu-west-1": 8.5938,
+  "aws-us-east-1": 7.8125,
+  "aws-us-west-2": 7.8125,
+  "azure-eastus2": 9.125,
+  "azure-westus2": 9.125,
+  "europe-central2": 8.125,
+  "europe-north1": 7.5,
+  "europe-north2": 6.5625,
+  "europe-southwest1": 7.8125,
+  "europe-west1": 7.5,
+  "europe-west10": 9.625,
+  "europe-west12": 8.0625,
+  "europe-west2": 7.8125,
+  "europe-west3": 8.125,
+  "europe-west4": 7.5,
+  "europe-west6": 8.75,
+  "europe-west8": 7.8125,
+  "europe-west9": 7.8125,
+  "me-central1": 7.5938,
+  "me-central2": 10,
+  "me-west1": 7.5,
+  "northamerica-northeast1": 6.5625,
+  "northamerica-northeast2": 6.5625,
+  "northamerica-south1": 6.8125,
+  "southamerica-east1": 11.25,
+  "southamerica-west1": 8.9375,
+  "us-central1": 6.25,
+  "us-east1": 6.25,
+  "us-east4": 6.25,
+  "us-east5": 6.25,
+  "us-east7": 6.25,
+  "us-south1": 7.5,
+  "us-west1": 6.25,
+  "us-west2": 8.4375,
+  "us-west3": 8.4375,
+  "us-west4": 6.25,
+  "us-west8": 6.25
+};
+var ON_DEMAND_PRICES_AS_OF = "2026-11-20";
+
 // ../core/src/pricing.ts
 var BYTES_PER_TIB = 2 ** 40;
 var DAYS_PER_MONTH = 30;
 var DEFAULT_CONFIG = {
   pricePerTib: 6.25,
+  builtInRegionPrices: true,
   limitMonthly: null,
   defaultRunsPerDay: 1,
   runsPerDay: {}
@@ -45831,13 +45893,28 @@ function monthlyDelta(baseBytes, headBytes, pricePerTib, runsPerDay) {
   return monthlyCost(headBytes, pricePerTib, runsPerDay) - monthlyCost(baseBytes, pricePerTib, runsPerDay);
 }
 function pricePerTibFor(model, config) {
-  const location = model.location?.toLowerCase();
+  const location = model.location;
   if (location !== void 0) {
-    for (const [key, price] of Object.entries(config.pricePerTibByLocation ?? {})) {
-      if (key.toLowerCase() === location) return price;
+    const own = lookup(config.pricePerTibByLocation, location);
+    if (own !== void 0) return own;
+    if (config.builtInRegionPrices === true) {
+      const list = lookup(ON_DEMAND_PRICE_PER_TIB, location);
+      if (list !== void 0) return list;
     }
   }
   return config.pricePerTib;
+}
+function listPriceFor(location, config) {
+  if (location === void 0 || config.builtInRegionPrices !== true) return void 0;
+  if (lookup(config.pricePerTibByLocation, location) !== void 0) return void 0;
+  return lookup(ON_DEMAND_PRICE_PER_TIB, location);
+}
+function lookup(prices, location) {
+  const wanted = location.toLowerCase();
+  for (const [key, price] of Object.entries(prices ?? {})) {
+    if (key.toLowerCase() === wanted) return price;
+  }
+  return void 0;
 }
 function runsPerDayFor(model, config) {
   const byName = config.runsPerDay[model.name];
@@ -46050,7 +46127,11 @@ function footer(report) {
   const byLocation = Object.entries(report.pricePerTibByLocation ?? {}).map(
     ([location, price2]) => `${price2 === 0 ? "0 (bytes only)" : formatUsd(price2)} in ${location}`
   );
-  const price = byLocation.length === 0 ? `${perTib(report.pricePerTib)} on-demand` : `${perTib(report.pricePerTib)} on-demand (${byLocation.join(", ")})`;
+  const own = byLocation.length === 0 ? `${perTib(report.pricePerTib)} on-demand` : `${perTib(report.pricePerTib)} on-demand (${byLocation.join(", ")})`;
+  const list = report.listPrices;
+  const price = list === void 0 ? own : `Google's on-demand list price for each location as of ${list.asOf} (${Object.entries(
+    list.byLocation
+  ).map(([location, p]) => `${formatUsd(p)} per TiB in ${location}`).join(", ")}; otherwise ${own})`;
   return [
     `<sub>Estimates are upper bounds from BigQuery dry runs, priced at ${price}, `,
     "with no free-tier deduction. Runs per day come from `dataform-cost-check.yml`, not from your ",
@@ -46201,6 +46282,7 @@ async function estimateChange(change, runner, config, newTargets = /* @__PURE__ 
   return {
     status: "estimated",
     ...common,
+    ...model.location !== void 0 && { location: model.location },
     baseBytes: baseResult.bytes,
     headBytes: headResult.bytes,
     runsPerDay,
@@ -46222,6 +46304,15 @@ function limitCannotApply(report) {
   const estimated = report.estimates.filter((e2) => e2.status === "estimated");
   return report.limitMonthly !== null && estimated.length > 0 && estimated.every((e2) => e2.pricePerTib === 0);
 }
+function listPrices(estimates, config) {
+  const byLocation = {};
+  for (const e2 of estimates) {
+    if (e2.status !== "estimated") continue;
+    const price = listPriceFor(e2.location, config);
+    if (price !== void 0 && e2.location !== void 0) byLocation[e2.location] = price;
+  }
+  return Object.keys(byLocation).length === 0 ? {} : { listPrices: { asOf: ON_DEMAND_PRICES_AS_OF, byLocation } };
+}
 function buildReport(estimates, config) {
   const totalMonthlyDelta = estimates.reduce(
     (sum, e2) => e2.status === "estimated" ? sum + e2.monthlyDelta : sum,
@@ -46234,6 +46325,7 @@ function buildReport(estimates, config) {
     ...config.pricePerTibByLocation !== void 0 && {
       pricePerTibByLocation: config.pricePerTibByLocation
     },
+    ...listPrices(estimates, config),
     limitMonthly: config.limitMonthly,
     overLimit: exceedsLimit(totalMonthlyDelta, config.limitMonthly)
   };
@@ -46488,6 +46580,8 @@ function parseConfig(text) {
   }
   return {
     pricePerTib: optional("price_per_tib", raw.price_per_tib, DEFAULT_CONFIG.pricePerTib),
+    // Google's list price per location applies only when the team sets no price of its own.
+    builtInRegionPrices: raw.price_per_tib === void 0,
     ...pricePerTibByLocation !== void 0 && { pricePerTibByLocation },
     limitMonthly: raw.limit_monthly === void 0 || raw.limit_monthly === null ? DEFAULT_CONFIG.limitMonthly : nonNegative("limit_monthly", raw.limit_monthly),
     defaultRunsPerDay: optional(

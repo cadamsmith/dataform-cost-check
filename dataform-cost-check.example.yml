@@ -1,7 +1,8 @@
 # Copy to dataform-cost-check.yml in your Dataform repository.
-price_per_tib: 6.25 # USD, on-demand. Check the current price for your region.
-price_per_tib_by_location: # Optional overrides by BigQuery location, for example:
-  # asia-northeast1: 7.50
+# By default each model is priced at Google's on-demand list price for its location.
+# price_per_tib: 6.25 # USD. Set it to use one price everywhere (a discount, or 0 for slot-based pricing).
+# price_per_tib_by_location: # Or set prices for some locations only, for example:
+#   asia-northeast1: 7.00
 limit_monthly: 100 # Fail the check above this many USD per month. Omit for no limit.
 default_runs_per_day: 1
 runs_per_day: # Overrides by Dataform tag or model name.

@@ -253,10 +253,19 @@ function footer(report: Report): string {
   const byLocation = Object.entries(report.pricePerTibByLocation ?? {}).map(
     ([location, price]) => `${price === 0 ? "0 (bytes only)" : formatUsd(price)} in ${location}`,
   );
-  const price =
+  const own =
     byLocation.length === 0
       ? `${perTib(report.pricePerTib)} on-demand`
       : `${perTib(report.pricePerTib)} on-demand (${byLocation.join(", ")})`;
+  const list = report.listPrices;
+  const price =
+    list === undefined
+      ? own
+      : `Google's on-demand list price for each location as of ${list.asOf} (${Object.entries(
+          list.byLocation,
+        )
+          .map(([location, p]) => `${formatUsd(p)} per TiB in ${location}`)
+          .join(", ")}; otherwise ${own})`;
   return [
     `<sub>Estimates are upper bounds from BigQuery dry runs, priced at ${price}, `,
     "with no free-tier deduction. Runs per day come from `dataform-cost-check.yml`, not from your ",

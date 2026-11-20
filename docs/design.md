@@ -159,8 +159,12 @@ reports "not estimated" with a reason.
 - **Regions.** On-demand price varies by location. The price is configurable first:
   `price_per_tib_by_location` overrides `price_per_tib` for a model whose location
   matches, without regard to case (`core.pricePerTibFor`), and the comment lists the
-  overrides. A model with no location uses `price_per_tib`. Built-in region-aware prices
-  come later. Each model carries its BigQuery location.
+  overrides. A model with no location uses `price_per_tib`. Built-in prices: when the
+  config sets no `price_per_tib`, each model is priced at Google's on-demand list price for
+  its location (`core.ON_DEMAND_PRICE_PER_TIB`, 56 locations read from the Cloud Billing
+  Catalog API on 2026-11-20; the footer names the prices used and their date). Order: the
+  team's `price_per_tib_by_location`, then the list price, then `price_per_tib`. A price the
+  team sets (a discount, or 0) always wins. Each model carries its BigQuery location.
   Dataform 3 has no location per action, so a project has one location:
   `defaultLocation` in `workflow_settings.yaml`. That setting is optional. When it is
   missing, models carry no location and the dry run sends none, so BigQuery picks the

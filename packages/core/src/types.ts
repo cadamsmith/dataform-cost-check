@@ -103,6 +103,8 @@ export type Estimate =
       readonly name: string;
       readonly kind: ChangeKind;
       readonly type: ModelType;
+      /** BigQuery location the model runs in, when the project sets one. */
+      readonly location?: string;
       /** Bytes per run at base; 0 for added models. */
       readonly baseBytes: number;
       /** Bytes per run at head; 0 for removed models. */
@@ -173,6 +175,12 @@ export interface Config {
    * regard to case. Models whose location is not listed, or unset, use `pricePerTib`.
    */
   readonly pricePerTibByLocation?: Readonly<Record<string, number>>;
+  /**
+   * Price models by Google's on-demand list price for their location
+   * (`ON_DEMAND_PRICE_PER_TIB`). On when the config sets no `price_per_tib`, so a price the
+   * team sets (a discount, or 0 for slot-based pricing) always wins.
+   */
+  readonly builtInRegionPrices?: boolean;
   /** Fail the check when the total monthly delta exceeds this. `null` disables the limit. */
   readonly limitMonthly: number | null;
   readonly defaultRunsPerDay: number;
@@ -212,6 +220,14 @@ export interface Report {
   readonly totalMonthlyDelta: number;
   readonly pricePerTib: number;
   readonly pricePerTibByLocation?: Readonly<Record<string, number>>;
+  /**
+   * When built-in list prices were used: the locations priced that way, with their price,
+   * and the date the prices were read.
+   */
+  readonly listPrices?: {
+    readonly asOf: string;
+    readonly byLocation: Readonly<Record<string, number>>;
+  };
   readonly limitMonthly: number | null;
   readonly overLimit: boolean;
   /** Present only when refresh history is turned on. */

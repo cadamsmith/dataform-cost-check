@@ -1,3 +1,4 @@
+import { ON_DEMAND_PRICE_PER_TIB } from "./region-prices.ts";
 import type { Config, Model } from "./types.ts";
 
 /** Bytes in one tebibyte (2^40). BigQuery bills on-demand queries per TiB. */
@@ -9,6 +10,7 @@ export const DAYS_PER_MONTH = 30;
 /** Default config. The price is the US on-demand list price; verify against current docs. */
 export const DEFAULT_CONFIG: Config = {
   pricePerTib: 6.25,
+  builtInRegionPrices: true,
   limitMonthly: null,
   defaultRunsPerDay: 1,
   runsPerDay: {},
@@ -43,18 +45,40 @@ export function monthlyDelta(
 }
 
 /**
- * The on-demand price for a model's location: a `pricePerTibByLocation` entry matched
- * without regard to case, else `pricePerTib`. A model with no location (BigQuery picks
- * one at run time) uses `pricePerTib`.
+ * The on-demand price for a model's location, in this order: the team's own
+ * `pricePerTibByLocation` entry; Google's list price for that location, when
+ * `builtInRegionPrices` is on; else `pricePerTib`. Locations match without regard to case.
+ * A model with no location (BigQuery picks one at run time) uses `pricePerTib`.
  */
 export function pricePerTibFor(model: Pick<Model, "location">, config: Config): number {
-  const location = model.location?.toLowerCase();
+  const location = model.location;
   if (location !== undefined) {
-    for (const [key, price] of Object.entries(config.pricePerTibByLocation ?? {})) {
-      if (key.toLowerCase() === location) return price;
+    const own = lookup(config.pricePerTibByLocation, location);
+    if (own !== undefined) return own;
+    if (config.builtInRegionPrices === true) {
+      const list = lookup(ON_DEMAND_PRICE_PER_TIB, location);
+      if (list !== undefined) return list;
     }
   }
   return config.pricePerTib;
+}
+
+/** Google's list price for a location, when built-in prices apply and it is listed. */
+export function listPriceFor(location: string | undefined, config: Config): number | undefined {
+  if (location === undefined || config.builtInRegionPrices !== true) return undefined;
+  if (lookup(config.pricePerTibByLocation, location) !== undefined) return undefined;
+  return lookup(ON_DEMAND_PRICE_PER_TIB, location);
+}
+
+function lookup(
+  prices: Readonly<Record<string, number>> | undefined,
+  location: string,
+): number | undefined {
+  const wanted = location.toLowerCase();
+  for (const [key, price] of Object.entries(prices ?? {})) {
+    if (key.toLowerCase() === wanted) return price;
+  }
+  return undefined;
 }
 
 /**

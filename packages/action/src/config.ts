@@ -40,6 +40,8 @@ export function parseConfig(text: string): Config {
 
   return {
     pricePerTib: optional("price_per_tib", raw.price_per_tib, DEFAULT_CONFIG.pricePerTib),
+    // Google's list price per location applies only when the team sets no price of its own.
+    builtInRegionPrices: raw.price_per_tib === undefined,
     ...(pricePerTibByLocation !== undefined && { pricePerTibByLocation }),
     limitMonthly:
       raw.limit_monthly === undefined || raw.limit_monthly === null

@@ -14,10 +14,16 @@ describe("parseConfig", () => {
     ].join("\n");
     expect(parseConfig(text)).toEqual({
       pricePerTib: 6.25,
+      builtInRegionPrices: false,
       limitMonthly: 100,
       defaultRunsPerDay: 1,
       runsPerDay: { hourly: 24 },
     });
+  });
+
+  it("uses Google's list prices only when the config sets no price_per_tib", () => {
+    expect(parseConfig("limit_monthly: 100").builtInRegionPrices).toBe(true);
+    expect(parseConfig("price_per_tib: 0").builtInRegionPrices).toBe(false);
   });
 
   it("parses the example file in the repository", () => {

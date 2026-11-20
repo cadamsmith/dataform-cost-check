@@ -102,9 +102,9 @@ datasets that do not exist or use the wrong variable values.
 Configuration, in `dataform-cost-check.yml` (see [`dataform-cost-check.example.yml`](dataform-cost-check.example.yml)):
 
 ```yaml
-price_per_tib: 6.25 # USD, on-demand
-price_per_tib_by_location: # optional, by BigQuery location (matches defaultLocation)
-  asia-northeast1: 7.50
+# price_per_tib: 6.25 # optional: one USD price everywhere (default: Google's list price per location)
+# price_per_tib_by_location: # optional: your own price for some locations
+#   asia-northeast1: 7.00
 limit_monthly: 100 # fail the check above this
 default_runs_per_day: 1
 runs_per_day: # overrides by Dataform tag or model name

@@ -92,6 +92,9 @@ describe("readRefreshHistory", () => {
     expect(history).toEqual({
       status: "ok",
       days: 7,
+      project: "proj",
+      jobsRead: 3,
+      complete: true,
       runs: {
         [T]: { endedAt: new Date(1763660002500).toISOString(), durationMs: 2500, slotMs: 7200000 },
       },
@@ -108,6 +111,15 @@ describe("readRefreshHistory", () => {
     const history = await readRefreshHistory([T], options(fetch));
     expect(history).toMatchObject({ status: "ok", runs: { [T]: { durationMs: 90000 } } });
     expect(urls[1]).toContain("pageToken=p2");
+  });
+
+  it("says when the page cap cut the search short", async () => {
+    const { fetch } = fetchReturning(200, { jobs: [ctas], nextPageToken: "more" });
+    const history = await readRefreshHistory(["proj.analytics.other"], {
+      ...options(fetch),
+      maxPages: 1,
+    });
+    expect(history).toMatchObject({ status: "ok", jobsRead: 1, complete: false, runs: {} });
   });
 
   it("says plainly when the permission is missing", async () => {

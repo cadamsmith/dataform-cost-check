@@ -45655,6 +45655,8 @@ async function readRefreshHistory(targets, options) {
   const runs = {};
   const since = Date.now() - days * 24 * 60 * 60 * 1e3;
   let pageToken;
+  let jobsRead = 0;
+  let complete = false;
   for (let page = 0; page < (options.maxPages ?? 5) && wanted.size > 0; page++) {
     const params = new URLSearchParams({
       allUsers: "true",
@@ -45675,6 +45677,7 @@ async function readRefreshHistory(targets, options) {
         reason: response.status === 403 ? "the service account cannot list job history (needs bigquery.jobs.listAll, e.g. BigQuery Resource Viewer)" : `job history could not be read (HTTP ${String(response.status)})`
       };
     }
+    jobsRead += body.jobs?.length ?? 0;
     for (const job of body.jobs ?? []) {
       if (job.status?.errorResult !== void 0) continue;
       const target = jobTarget(job, wanted);
@@ -45690,9 +45693,13 @@ async function readRefreshHistory(targets, options) {
       wanted.delete(target);
     }
     pageToken = body.nextPageToken;
-    if (pageToken === void 0) break;
+    if (pageToken === void 0) {
+      complete = true;
+      break;
+    }
   }
-  return { status: "ok", days, runs };
+  if (wanted.size === 0) complete = true;
+  return { status: "ok", days, project: options.projectId, jobsRead, complete, runs };
 }
 
 // ../bigquery/src/index.ts
@@ -46173,15 +46180,20 @@ function historySection(report) {
       `| \`${e2.name}\` | ${run.endedAt.slice(0, 16).replace("T", " ")} UTC | ${formatDuration(run.durationMs)} | ${formatSlotHours(run.slotMs)} |`
     ];
   });
+  const searched = history.complete ? `the last ${String(history.days)} days of \`${history.project}\`'s job records` : `the most recent ${history.jobsRead.toLocaleString("en-US")} job records of \`${history.project}\` (a busy project: older runs were not searched)`;
   if (rows.length === 0) {
-    return [
-      title,
-      "",
-      `No run of the changed models in the last ${String(history.days)} days.`,
-      ""
-    ];
+    return [title, "", `No run of the changed models found in ${searched}.`, ""];
   }
-  return [title, "", "| Model | Last run | Took | Slot-hours |", "|---|---|--:|--:|", ...rows, ""];
+  return [
+    title,
+    "",
+    "| Model | Last run | Took | Slot-hours |",
+    "|---|---|--:|--:|",
+    ...rows,
+    "",
+    `From ${searched}. Models not listed had no run there.`,
+    ""
+  ];
 }
 function formatDuration(ms) {
   if (ms < 6e4) return `${(ms / 1e3).toFixed(1)} s`;

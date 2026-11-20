@@ -123,8 +123,10 @@ through Workload Identity Federation. Grant it only:
 | BigQuery Data Viewer (`roles/bigquery.dataViewer`) | Each dataset your models read (or the project) | BigQuery checks read access on every table a dry run references, as it would for the real query |
 
 **Optional, for refresh history** (`history: true` in the config): BigQuery Resource Viewer
-(`roles/bigquery.resourceViewer`) on the project Dataform runs in, for
-`bigquery.jobs.listAll`. The action then reads the free job records (`jobs.list`) and shows
+(`roles/bigquery.resourceViewer`) on the `project-id` project, for `bigquery.jobs.listAll`.
+History is read from that project's job records, so it shows runs only when Dataform runs
+its jobs there too. The role lets the account list everyone's jobs in the project, SQL
+included (matched in memory, never posted); grant it only if you want history. The action then reads the free job records (`jobs.list`) and shows
 each changed model's last run: when, how long, and slot-hours, which is what slot-based
 (Editions) pricing charges for. It is history, never a forecast. Without the role, the
 comment says history is unavailable and the check carries on.

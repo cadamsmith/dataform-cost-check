@@ -157,6 +157,13 @@ function notesFor(e: Estimated): string[] {
     ...(e.likelyCause === undefined
       ? []
       : [`- \`${e.name}\`: likely cause: ${causeText(e.likelyCause)}.`]),
+    ...(e.merge === undefined
+      ? []
+      : [
+          e.merge.partitionFiltered
+            ? `- \`${e.name}\`: has a unique key, so each run is a MERGE that also reads the table's partitions matching its update filter. Those bytes are not included, so this model's figure is a lower bound.`
+            : `- \`${e.name}\`: has a unique key, so each run is a MERGE that also reads the whole existing table. Those bytes are not included, so this model's figure is a lower bound. An \`updatePartitionFilter\` limits that read.`,
+        ]),
     ...(e.fullRefreshBytes === undefined
       ? []
       : [

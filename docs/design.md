@@ -88,6 +88,12 @@ reports "not estimated" with a reason.
   If only that dry run fails, the note is left out and the estimate stands. A newly added incremental model's incremental query reads its own table, which does not
   exist yet, so it gets no monthly estimate; the comment says so and gives its first run, the
   full refresh, in bytes. It is left out of the "every dry run fails" count (#38).
+- **Unique-key incremental models.** With a `uniqueKey`, each run is a MERGE into the
+  existing table, which also reads that table; the dry run covers only the SELECT. Measured
+  2026-11-20: the MERGE dry run counted the SELECT's bytes plus the whole 6.76 MB target
+  (43,068,800 against 36,313,200), and a non-partition filter on the target did not reduce
+  it. The comment notes these models and calls their figure a lower bound; with
+  `updatePartitionFilter` the note says the read is limited to matching partitions.
 - **Pre-operations.** Incremental models often `DECLARE` a checkpoint in
   `pre_operations` and filter on it. A dry run of the query alone fails on the unknown
   name, and a dry run of pre-operations plus query counted 0 bytes for the filtered

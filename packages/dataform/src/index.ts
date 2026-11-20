@@ -71,6 +71,8 @@ interface CompiledAction {
   readonly queries?: readonly string[];
   readonly tags?: readonly string[];
   readonly disabled?: boolean;
+  readonly uniqueKey?: readonly string[];
+  readonly bigquery?: { readonly updatePartitionFilter?: string };
 }
 
 interface CompilationErrorEntry {
@@ -193,6 +195,10 @@ function toModel(
     ...(action.incrementalPreOps !== undefined &&
       action.incrementalPreOps.length > 0 && { incrementalPreOps: action.incrementalPreOps }),
     tags: action.tags ?? [],
+    ...(type === "incremental" &&
+      (action.uniqueKey?.length ?? 0) > 0 && {
+        merge: { partitionFiltered: Boolean(action.bigquery?.updatePartitionFilter) },
+      }),
     ...(location !== undefined && { location }),
   };
 }

@@ -223,6 +223,7 @@ export async function estimateChange(
     pricePerTib,
     monthlyDelta: monthlyDelta(baseResult.bytes, headResult.bytes, pricePerTib, runsPerDay),
     ...(likelyCause !== undefined && { likelyCause }),
+    ...(head?.merge !== undefined && { merge: head.merge }),
     ...(fullRefreshResult !== undefined &&
       "bytes" in fullRefreshResult && { fullRefreshBytes: fullRefreshResult.bytes }),
   };

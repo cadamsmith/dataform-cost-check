@@ -231,6 +231,24 @@ describe("renderComment at 0 per TiB", () => {
   });
 });
 
+describe("unique-key incremental models", () => {
+  it("says the MERGE's read of the existing table is not included", () => {
+    const merged: Estimate = {
+      ...customers,
+      name: "orders_merge",
+      merge: { partitionFiltered: false },
+    };
+    const body = renderComment(report({ estimates: [merged], totalMonthlyDelta: 0.92 }));
+    expect(body).toContain(
+      "- `orders_merge`: has a unique key, so each run is a MERGE that also reads the whole existing table. Those bytes are not included, so this model's figure is a lower bound.",
+    );
+    const filtered = renderComment(
+      report({ estimates: [{ ...merged, merge: { partitionFiltered: true } }] }),
+    );
+    expect(filtered).toContain("partitions matching its update filter");
+  });
+});
+
 describe("commentMarker and monorepos", () => {
   it("keeps the plain marker for the root project", () => {
     expect(commentMarker()).toBe(COMMENT_MARKER);

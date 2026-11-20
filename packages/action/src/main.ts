@@ -13,7 +13,7 @@ import { loadModels } from "@dataform-cost-check/dataform";
 import { resolveBaseRef, withBaseWorktree } from "./base-checkout.ts";
 import { parseConfig } from "./config.ts";
 import { readPullRequestContext, upsertStickyComment } from "./pr-comment.ts";
-import { dryRunFailure, failureDetails, runCheck } from "./run.ts";
+import { dryRunFailure, failureDetails, partitionFilterFailure, runCheck } from "./run.ts";
 
 /** Dry runs in flight at once, to stay under BigQuery's rate limits on large PRs. */
 const MAX_CONCURRENT_DRY_RUNS = 4;
@@ -86,7 +86,7 @@ async function main(): Promise<void> {
     );
   }
 
-  const failure = dryRunFailure(report);
+  const failure = partitionFilterFailure(report) ?? dryRunFailure(report);
   if (failure !== undefined) {
     core.setFailed(failure);
   } else if (report.overLimit) {

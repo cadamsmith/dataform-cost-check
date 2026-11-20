@@ -33,6 +33,9 @@ export const ERROR_KIND_TEXT: Readonly<Record<DryRunErrorKind, string>> = {
   unknown: "the dry run returned an error",
 };
 
+export const PARTITION_FILTER_REQUIRED_REASON =
+  "Reads a table that requires a partition filter, and this change leaves the query without one, so it would fail when it runs. This fails the check.";
+
 function dryRunFailed(side: "base" | "head", result: DryRunError) {
   return {
     status: "unestimable",
@@ -137,6 +140,17 @@ export async function estimateChange(
         errorKind: headResult.errorKind,
         detail: headResult.error,
         newUpstream: upstream,
+      };
+    }
+    if (headResult.errorKind === "partition-filter-required") {
+      // Base passed and head does not: this change drops a filter that a table it reads
+      // requires, so the query would fail when it runs. A real bug, so it fails the check.
+      return {
+        status: "unestimable",
+        ...common,
+        reason: `${PARTITION_FILTER_REQUIRED_REASON} BigQuery's message is in the job log.`,
+        errorKind: headResult.errorKind,
+        detail: headResult.error,
       };
     }
     return { ...common, ...dryRunFailed("head", headResult) };

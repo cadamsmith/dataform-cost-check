@@ -1,7 +1,7 @@
 import { BYTES_PER_TIB, DEFAULT_CONFIG, FakeDryRunner } from "@dataform-cost-check/core";
 import type { Model, Report } from "@dataform-cost-check/core";
 import { describe, expect, it } from "vitest";
-import { dryRunFailure, failureDetails, runCheck } from "../src/run.ts";
+import { dryRunFailure, failureDetails, partitionFilterFailure, runCheck } from "../src/run.ts";
 
 const base: Model = {
   target: "proj.analytics.orders_daily",
@@ -101,5 +101,38 @@ describe("dryRunFailure", () => {
   it("passes when nothing needed a dry run", () => {
     expect(dryRunFailure(report([]))).toBeUndefined();
     expect(dryRunFailure(report([skipped]))).toBeUndefined();
+  });
+});
+
+describe("partitionFilterFailure", () => {
+  const requiresFilter = {
+    error:
+      "Cannot query over table 'proj.raw.orders' without a filter over column(s) 'day' that can be used for partition elimination",
+    errorKind: "partition-filter-required",
+  } as const;
+  const check = (runner: FakeDryRunner) =>
+    runCheck({
+      config: DEFAULT_CONFIG,
+      loadModels: (side) => Promise.resolve(side === "base" ? [base] : [head]),
+      runner,
+    });
+
+  it("fails a change that drops a required partition filter, and names the model", async () => {
+    const { report, comment } = await check(
+      new FakeDryRunner([[base.query, { bytes: 1024 }]], requiresFilter),
+    );
+    expect(partitionFilterFailure(report)).toContain(
+      "orders_daily: reads a table that requires a partition filter",
+    );
+    // Explained, so not blamed on project setup.
+    expect(dryRunFailure(report)).toBeUndefined();
+    expect(comment).toContain("so it would fail when it runs. This fails the check.");
+    expect(comment).not.toContain("'day'");
+  });
+
+  it("does not blame the change when base already failed that way", async () => {
+    const { report } = await check(new FakeDryRunner([], requiresFilter));
+    expect(partitionFilterFailure(report)).toBeUndefined();
+    expect(dryRunFailure(report)).toContain("Dry run at base failed");
   });
 });

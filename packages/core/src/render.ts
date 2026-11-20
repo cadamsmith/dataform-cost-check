@@ -201,6 +201,11 @@ function row(e: Estimated): string {
 
 function notesFor(e: Estimated): string[] {
   return [
+    ...(e.viaViews === undefined
+      ? []
+      : [
+          `- \`${e.name}\`: its own SQL is unchanged, but it reads ${e.viaViews.map((v) => `\`${v}\``).join(", ")}, which this pull request changes. Estimated with the new view definition.`,
+        ]),
     ...(e.likelyCause === undefined
       ? []
       : [`- \`${e.name}\`: likely cause: ${causeText(e.likelyCause)}.`]),

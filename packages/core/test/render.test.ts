@@ -333,3 +333,16 @@ describe("renderComment with built-in list prices", () => {
     );
   });
 });
+
+describe("readers of changed views", () => {
+  it("says why a model with unchanged SQL is listed", () => {
+    const body = renderComment(
+      report({
+        estimates: [{ ...customers, name: "daily", kind: "modified", viaViews: ["orders_v"] }],
+      }),
+    );
+    expect(body).toContain(
+      "- `daily`: its own SQL is unchanged, but it reads `orders_v`, which this pull request changes. Estimated with the new view definition.",
+    );
+  });
+});

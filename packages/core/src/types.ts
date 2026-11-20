@@ -45,6 +45,11 @@ export type ModelChange =
       readonly target: string;
       readonly base: Model;
       readonly head: Model;
+      /**
+       * Set when the model's own SQL did not change but it reads views this pull request
+       * changes: their short names. Its queries then carry those views inlined.
+       */
+      readonly viaViews?: readonly string[];
     };
 
 /** What a dry run returns: bytes the query would process, or why it could not tell. */
@@ -124,6 +129,8 @@ export type Estimate =
        * run failed.
        */
       readonly fullRefreshBytes?: number;
+      /** The changed views this model reads, when that is the only reason it is listed. */
+      readonly viaViews?: readonly string[];
       /**
        * Incremental models with a `uniqueKey`: the run is a MERGE that also reads the
        * existing table, which the dry run of the SELECT does not count.

@@ -45962,6 +45962,121 @@ function indexByTarget(models, side) {
   return map;
 }
 
+// ../core/src/views.ts
+var NOT_ALIAS = /* @__PURE__ */ new Set([
+  "where",
+  "join",
+  "left",
+  "right",
+  "inner",
+  "full",
+  "cross",
+  "on",
+  "group",
+  "order",
+  "limit",
+  "union",
+  "window",
+  "having",
+  "qualify",
+  "using",
+  "except",
+  "intersect",
+  "for",
+  "tablesample",
+  "as",
+  "pivot",
+  "unpivot",
+  "natural"
+]);
+function inlineViews(sql, definitions) {
+  let out = sql;
+  for (const [target, viewSql] of definitions) {
+    const quoted = `\`${target}\``;
+    let from = 0;
+    for (; ; ) {
+      const at = out.indexOf(quoted, from);
+      if (at < 0) break;
+      const after = out.slice(at + quoted.length);
+      const next = /^\s+(?:AS\s+)?([A-Za-z_]\w*)/i.exec(after);
+      const hasAlias = next?.[1] !== void 0 && !NOT_ALIAS.has(next[1].toLowerCase());
+      const asKeyword = /^\s+AS\s+/i.test(after);
+      const name = target.split(".").pop() ?? "v";
+      const replacement = hasAlias || asKeyword ? `(${viewSql.trim()})` : `(${viewSql.trim()}) AS ${name}`;
+      out = out.slice(0, at) + replacement + after;
+      from = at + replacement.length;
+    }
+  }
+  return out;
+}
+function withInlined(model, definitions) {
+  if (definitions.size === 0) return model;
+  return {
+    ...model,
+    query: inlineViews(model.query, definitions),
+    ...model.incrementalQuery !== void 0 && {
+      incrementalQuery: inlineViews(model.incrementalQuery, definitions)
+    }
+  };
+}
+function reads(model, targets) {
+  const sql = `${model.query}
+${model.incrementalQuery ?? ""}`;
+  return [...targets].filter((t2) => sql.includes(`\`${t2}\``));
+}
+function withViewReaders(changes, base, head) {
+  const baseByTarget = new Map(base.map((m2) => [m2.target, m2]));
+  const isView = (m2) => m2?.type === "view";
+  const baseDefs = /* @__PURE__ */ new Map();
+  const headDefs = /* @__PURE__ */ new Map();
+  for (const c of changes) {
+    const b = c.kind === "added" ? void 0 : c.base;
+    const h2 = c.kind === "removed" ? void 0 : c.head;
+    if (!isView(b) && !isView(h2)) continue;
+    if (b !== void 0 && isView(b)) baseDefs.set(c.target, b.query);
+    if (h2 !== void 0 && isView(h2)) headDefs.set(c.target, h2.query);
+  }
+  if (baseDefs.size === 0 && headDefs.size === 0) return [...changes];
+  const changedTargets = new Set(changes.map((c) => c.target));
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const view of head.filter((m2) => isView(m2) && !changedTargets.has(m2.target))) {
+      if (headDefs.has(view.target)) continue;
+      const affected = reads(view, /* @__PURE__ */ new Set([...baseDefs.keys(), ...headDefs.keys()]));
+      if (affected.length === 0) continue;
+      const b = baseByTarget.get(view.target);
+      if (b !== void 0) baseDefs.set(view.target, inlineViews(b.query, baseDefs));
+      headDefs.set(view.target, inlineViews(view.query, headDefs));
+      grew = true;
+    }
+  }
+  const affectedViews = /* @__PURE__ */ new Set([...baseDefs.keys(), ...headDefs.keys()]);
+  const shortName = (target) => target.split(".").pop() ?? target;
+  const inlineChange = (c) => {
+    if (c.kind === "added") return { ...c, head: withInlined(c.head, headDefs) };
+    if (c.kind === "removed") return { ...c, base: withInlined(c.base, baseDefs) };
+    return { ...c, base: withInlined(c.base, baseDefs), head: withInlined(c.head, headDefs) };
+  };
+  const out = changes.map(
+    (c) => isView(c.kind === "removed" ? c.base : c.head) ? c : inlineChange(c)
+  );
+  for (const h2 of head) {
+    if (changedTargets.has(h2.target) || isView(h2)) continue;
+    const b = baseByTarget.get(h2.target);
+    if (b === void 0) continue;
+    const viaViews = reads(h2, affectedViews);
+    if (viaViews.length === 0) continue;
+    out.push({
+      kind: "modified",
+      target: h2.target,
+      base: withInlined(b, baseDefs),
+      head: withInlined(h2, headDefs),
+      viaViews: viaViews.map(shortName)
+    });
+  }
+  return out.sort((x2, y) => x2.target.localeCompare(y.target));
+}
+
 // ../core/src/render.ts
 var COMMENT_MARKER = "<!-- dataform-cost-check -->";
 function commentMarker(projectDir = ".") {
@@ -46088,6 +46203,9 @@ function row(e2) {
 }
 function notesFor(e2) {
   return [
+    ...e2.viaViews === void 0 ? [] : [
+      `- \`${e2.name}\`: its own SQL is unchanged, but it reads ${e2.viaViews.map((v) => `\`${v}\``).join(", ")}, which this pull request changes. Estimated with the new view definition.`
+    ],
     ...e2.likelyCause === void 0 ? [] : [`- \`${e2.name}\`: likely cause: ${causeText(e2.likelyCause)}.`],
     ...e2.merge === void 0 ? [] : [
       e2.merge.partitionFiltered ? `- \`${e2.name}\`: has a unique key, so each run is a MERGE that also reads the table's partitions matching its update filter. Those bytes are not included, so this model's figure is a lower bound.` : `- \`${e2.name}\`: has a unique key, so each run is a MERGE that also reads the whole existing table. Those bytes are not included, so this model's figure is a lower bound. An \`updatePartitionFilter\` limits that read.`
@@ -46290,6 +46408,7 @@ async function estimateChange(change, runner, config, newTargets = /* @__PURE__ 
     monthlyDelta: monthlyDelta(baseResult.bytes, headResult.bytes, pricePerTib, runsPerDay),
     ...likelyCause !== void 0 && { likelyCause },
     ...head?.merge !== void 0 && { merge: head.merge },
+    ...change.kind === "modified" && change.viaViews !== void 0 && { viaViews: change.viaViews },
     ...fullRefreshResult !== void 0 && "bytes" in fullRefreshResult && { fullRefreshBytes: fullRefreshResult.bytes }
   };
 }
@@ -46683,7 +46802,8 @@ async function upsertStickyComment(options) {
 var SUMMARY_MAX_LENGTH = 9e5;
 async function runCheck(deps) {
   const [base, head] = await Promise.all([deps.loadModels("base"), deps.loadModels("head")]);
-  const estimated = await estimateChanges(diffModels(base, head), deps.runner, deps.config);
+  const changes = withViewReaders(diffModels(base, head), base, head);
+  const estimated = await estimateChanges(changes, deps.runner, deps.config);
   const report = deps.config.history === true && deps.readHistory !== void 0 && estimated.estimates.length > 0 ? { ...estimated, history: await deps.readHistory(estimated.estimates.map((e2) => e2.target)) } : estimated;
   const projectDir = deps.projectDir ?? ".";
   return {

@@ -151,7 +151,13 @@ reports "not estimated" with a reason.
   a count of the models left out. The job summary gets the same report capped at 900,000
   (GitHub documents a 1 MiB step summary limit; not verified), and the job log gets it uncapped. Chosen in #25.
 - **Views.** Creating a view costs nothing; the cost lands on whatever reads it. Views are
-  skipped with that reason.
+  skipped with that reason, and the models that read a changed view are re-estimated
+  (`core.withViewReaders`), even when their own SQL is unchanged, with a note naming the
+  view. A dry run reads the view that is live in BigQuery, not the pull request's, so each
+  side's view definition is inlined into the reader's query as a subquery
+  (`core.inlineViews`): base with base, head with head, following unchanged views that read
+  a changed one. Chosen 2026-11-20, checked live: a view-only change that drops a filter
+  showed its reader going from 51.71 MiB to 1.76 GiB per run.
 - **Assertions, operations, pre/post operations.** Decide per type: estimate, skip, or
   label. Assertions are estimated like tables: each is a SELECT that scans its inputs on
   every run, so its bytes are a real, recurring spend. Custom operations and pre/post
@@ -187,5 +193,6 @@ reports "not estimated" with a reason.
   lookup is extra detail: if it fails (no access, a wildcard table, rate limits), the
   table is left out and the estimate stands. A dry run over a view lists only the view,
   not the tables under it, so no cause is named there: by design, the check does not
-  guess through views. Not detected: a filter that still exists but no longer prunes
+  guess through views. A view the pull request changes is inlined (see Views), so a filter
+  dropped inside it is named. Not detected: a filter that still exists but no longer prunes
   (for example, wrapped in a function).

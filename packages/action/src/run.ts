@@ -3,6 +3,7 @@ import {
   estimateChanges,
   PARTITION_FILTER_REQUIRED_REASON,
   renderComment,
+  withViewReaders,
 } from "@dataform-cost-check/core";
 import type { Config, DryRunner, Model, RefreshHistory, Report } from "@dataform-cost-check/core";
 
@@ -33,7 +34,8 @@ export const SUMMARY_MAX_LENGTH = 900_000;
 /** The whole check, minus I/O: diff, estimate, render. */
 export async function runCheck(deps: RunDeps): Promise<RunResult> {
   const [base, head] = await Promise.all([deps.loadModels("base"), deps.loadModels("head")]);
-  const estimated = await estimateChanges(diffModels(base, head), deps.runner, deps.config);
+  const changes = withViewReaders(diffModels(base, head), base, head);
+  const estimated = await estimateChanges(changes, deps.runner, deps.config);
   const report =
     deps.config.history === true && deps.readHistory !== undefined && estimated.estimates.length > 0
       ? { ...estimated, history: await deps.readHistory(estimated.estimates.map((e) => e.target)) }

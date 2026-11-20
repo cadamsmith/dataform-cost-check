@@ -110,8 +110,11 @@ A dry run is free and reads no data: BigQuery only plans the query and reports t
 would scan. The action never runs a billable query and needs no write access. Data Viewer also covers the table metadata the action reads to tell which tables are
 partitioned, which it uses to name a lost partition filter.
 
-> These roles have not yet been tested on a project that grants nothing else (tracked in
-> #27). If a dry run fails with "permission denied", the job log has BigQuery's message.
+Checked on 2026-11-20 with a service account that had nothing else. With Job User alone,
+the dry run is denied. With Job User and Metadata Viewer, the table metadata reads but the
+dry run is still denied ("does not have permission to query table"). With Job User and
+Data Viewer, both work. If a dry run fails with "permission denied", the job log has
+BigQuery's message.
 
 Example setup with `gcloud` (replace the capitalised values):
 

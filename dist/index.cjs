@@ -45122,8 +45122,8 @@ var require_dist3 = __commonJS({
 });
 
 // src/main.ts
-var import_node_fs2 = require("node:fs");
-var import_node_path3 = require("node:path");
+var import_node_fs4 = require("node:fs");
+var import_node_path4 = require("node:path");
 
 // ../../node_modules/.pnpm/@actions+core@3.0.1/node_modules/@actions/core/lib/command.js
 var os = __toESM(require("os"), 1);
@@ -46102,6 +46102,8 @@ function limitConcurrency(runner, max) {
 
 // ../dataform/src/index.ts
 var import_node_child_process = require("node:child_process");
+var import_node_fs2 = require("node:fs");
+var import_node_path2 = require("node:path");
 var import_node_util4 = require("node:util");
 var DataformCliNotFoundError = class extends Error {
   constructor(command) {
@@ -46110,6 +46112,16 @@ var DataformCliNotFoundError = class extends Error {
     this.name = "DataformCliNotFoundError";
   }
   command;
+};
+var DataformDependenciesMissingError = class extends Error {
+  constructor(projectDir) {
+    super(
+      `${projectDir} has a package.json but no node_modules. Run \`npm ci\` (or \`dataform install\`) in the project directory before Dataform Cost Check.`
+    );
+    this.projectDir = projectDir;
+    this.name = "DataformDependenciesMissingError";
+  }
+  projectDir;
 };
 var DataformCompilationError = class extends Error {
   constructor(errors) {
@@ -46137,6 +46149,9 @@ function compilationErrorsIn(stdout) {
 }
 async function compileProject(options) {
   const command = options.command ?? "dataform";
+  if ((0, import_node_fs2.existsSync)((0, import_node_path2.join)(options.projectDir, "package.json")) && !(0, import_node_fs2.existsSync)((0, import_node_path2.join)(options.projectDir, "node_modules"))) {
+    throw new DataformDependenciesMissingError(options.projectDir);
+  }
   let stdout;
   try {
     ({ stdout } = await execFileAsync(command, ["compile", "--json"], {
@@ -46208,9 +46223,10 @@ async function loadModels(options) {
 
 // src/base-checkout.ts
 var import_node_child_process2 = require("node:child_process");
+var import_node_fs3 = require("node:fs");
 var import_promises = require("node:fs/promises");
 var import_node_os = require("node:os");
-var import_node_path2 = require("node:path");
+var import_node_path3 = require("node:path");
 var import_node_util5 = require("node:util");
 var execFileAsync2 = (0, import_node_util5.promisify)(import_node_child_process2.execFile);
 async function resolveBaseRef(input, eventPath) {
@@ -46223,7 +46239,7 @@ async function resolveBaseRef(input, eventPath) {
   throw new Error("No base commit: set the base-ref input, or run on a pull_request event.");
 }
 async function withBaseWorktree(repoDir, ref, fn) {
-  const dir = (0, import_node_path2.join)(await (0, import_promises.mkdtemp)((0, import_node_path2.join)((0, import_node_os.tmpdir)(), "dataform-cost-check-")), "base");
+  const dir = (0, import_node_path3.join)(await (0, import_promises.mkdtemp)((0, import_node_path3.join)((0, import_node_os.tmpdir)(), "dataform-cost-check-")), "base");
   try {
     await execFileAsync2("git", ["-C", repoDir, "worktree", "add", "--detach", dir, ref]);
   } catch (error2) {
@@ -46240,6 +46256,13 @@ async function withBaseWorktree(repoDir, ref, fn) {
       () => (0, import_promises.rm)(dir, { recursive: true, force: true })
     );
   }
+}
+async function linkDependencies(headProject, baseProject) {
+  const headModules = (0, import_node_path3.join)(headProject, "node_modules");
+  const baseModules = (0, import_node_path3.join)(baseProject, "node_modules");
+  if (!(0, import_node_fs3.existsSync)((0, import_node_path3.join)(baseProject, "package.json"))) return;
+  if ((0, import_node_fs3.existsSync)(baseModules) || !(0, import_node_fs3.existsSync)(headModules)) return;
+  await (0, import_promises.symlink)(headModules, baseModules, "dir");
 }
 
 // src/config.ts
@@ -46428,14 +46451,14 @@ async function main() {
   }
   const baseRef = await resolveBaseRef(getInput("base-ref"), process.env.GITHUB_EVENT_PATH);
   info(`Dataform Cost Check (pre-alpha). Base: ${baseRef}. Dry runs in: ${projectId}.`);
-  const config = (0, import_node_fs2.existsSync)(configPath) ? parseConfig((0, import_node_fs2.readFileSync)(configPath, "utf8")) : DEFAULT_CONFIG;
-  if (!(0, import_node_fs2.existsSync)(configPath)) info(`No ${configPath} found; using defaults.`);
+  const config = (0, import_node_fs4.existsSync)(configPath) ? parseConfig((0, import_node_fs4.readFileSync)(configPath, "utf8")) : DEFAULT_CONFIG;
+  if (!(0, import_node_fs4.existsSync)(configPath)) info(`No ${configPath} found; using defaults.`);
   const repoDir = process.cwd();
-  const load = (side) => side === "head" ? loadModels({ projectDir: (0, import_node_path3.resolve)(repoDir, projectDir) }) : withBaseWorktree(
-    repoDir,
-    baseRef,
-    (dir) => loadModels({ projectDir: (0, import_node_path3.join)(dir, projectDir) })
-  );
+  const load = (side) => side === "head" ? loadModels({ projectDir: (0, import_node_path4.resolve)(repoDir, projectDir) }) : withBaseWorktree(repoDir, baseRef, async (dir) => {
+    const baseProject = (0, import_node_path4.join)(dir, projectDir);
+    await linkDependencies((0, import_node_path4.resolve)(repoDir, projectDir), baseProject);
+    return loadModels({ projectDir: baseProject });
+  });
   const { report, comment, summary: summary2, full } = await runCheck({
     config,
     loadModels: load,

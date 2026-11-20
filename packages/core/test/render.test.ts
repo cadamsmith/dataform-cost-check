@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   BYTES_PER_TIB,
   COMMENT_MARKER,
+  COMMENT_MAX_LENGTH,
   formatBytes,
   formatUsd,
   renderComment,
@@ -119,6 +120,53 @@ describe("renderComment", () => {
     const afterTitle = body.split("\n").slice(2).join("\n");
     expect(afterTitle).not.toMatch(/\bcosts?\b/i);
     expect(body).toContain("slot-based (Editions) pricing");
+  });
+});
+
+describe("renderComment size cap", () => {
+  const many: Estimate[] = Array.from({ length: 2000 }, (_, i) => ({
+    ...customers,
+    target: `proj.analytics.model_${String(i)}`,
+    name: `model_with_a_fairly_long_name_${String(i)}`,
+    monthlyDelta: i,
+  }));
+  const failures: Estimate[] = Array.from({ length: 500 }, (_, i) => ({
+    ...broken,
+    name: `broken_${String(i)}`,
+  }));
+  const big = report({
+    estimates: [...failures, ...many],
+    totalMonthlyDelta: 1_999_000,
+    limitMonthly: 100,
+    overLimit: true,
+  });
+
+  it("stays under GitHub's limit and keeps the verdict, largest changes first", () => {
+    const body = renderComment(big);
+    expect(body.length).toBeLessThanOrEqual(COMMENT_MAX_LENGTH);
+    expect(body).toContain(":x: Over the $100.00 limit.");
+    expect(body).toContain("slot-based (Editions) pricing");
+    expect(body).toMatch(
+      /…and \d+ more models, left out to keep this comment within GitHub's size limit\. The job summary has the full report\./,
+    );
+    expect(body.indexOf("model_with_a_fairly_long_name_1999`")).toBeLessThan(
+      body.indexOf("model_with_a_fairly_long_name_1998`"),
+    );
+    expect(body).not.toContain("model_with_a_fairly_long_name_0`");
+  });
+
+  it("counts every model left out", () => {
+    const body = renderComment(big, { maxLength: 5000 });
+    const rows = body.split("\n").filter((l) => l.startsWith("| `") || l.startsWith("- `")).length;
+    const omitted = Number(/…and (\d+) more models/.exec(body)?.[1]);
+    expect(rows + omitted).toBe(2500);
+    expect(body.length).toBeLessThanOrEqual(5000);
+  });
+
+  it("renders everything when it fits", () => {
+    const body = renderComment(big, { maxLength: Number.POSITIVE_INFINITY });
+    expect(body).not.toContain("more models");
+    expect(body).toContain("broken_499");
   });
 });
 

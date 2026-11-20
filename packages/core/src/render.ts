@@ -13,55 +13,134 @@ function causeText(cause: LikelyCause): string {
   return `a filter on the partitioned table \`${cause.table}\` was removed`;
 }
 
-/** Render the sticky PR comment. Wording always says "estimate", never "cost". */
-export function renderComment(report: Report): string {
-  const estimated = report.estimates.filter((e): e is Estimated => e.status === "estimated");
-  const notEstimated = report.estimates.filter((e): e is NotEstimated => e.status !== "estimated");
-  const lines: string[] = [COMMENT_MARKER, "### Dataform Cost Check: BigQuery estimate", ""];
+/**
+ * GitHub rejects a comment longer than 65,536 characters. The comment stops adding rows
+ * well below that, so the headline and verdict always survive.
+ */
+export const COMMENT_MAX_LENGTH = 60_000;
+
+/** Room kept for the line that says how many models were left out. */
+const OVERFLOW_RESERVE = 200;
+
+export interface RenderOptions {
+  /** Stop adding rows before the comment passes this many characters. */
+  readonly maxLength?: number;
+  /** Where the reader finds the rows left out, said after the count. */
+  readonly fullReportAt?: string;
+}
+
+/**
+ * Render the sticky PR comment. Wording always says "estimate", never "cost". The
+ * headline, the verdict and the footer always appear. Rows go in order of how much they
+ * move the estimate, largest first; when `maxLength` would be passed, the rest are left
+ * out and counted.
+ */
+export function renderComment(
+  report: Report,
+  {
+    maxLength = COMMENT_MAX_LENGTH,
+    fullReportAt = "The job summary has the full report.",
+  }: RenderOptions = {},
+): string {
+  const head = [COMMENT_MARKER, "### Dataform Cost Check: BigQuery estimate", ""];
+  const tail = footer(report);
 
   if (report.estimates.length === 0) {
-    lines.push("No models changed in this pull request, so there is nothing to estimate.", "");
-    lines.push(footer(report));
-    return lines.join("\n") + "\n";
-  }
-
-  lines.push(headline(report), "");
-
-  if (estimated.length > 0) {
-    lines.push(
-      "| Model | Change | Scanned per run (before → after) | Runs / day | Monthly estimate |",
-      "|---|---|---|--:|--:|",
+    return (
+      [
+        ...head,
+        "No models changed in this pull request, so there is nothing to estimate.",
+        "",
+        tail,
+      ].join("\n") + "\n"
     );
+  }
+  head.push(headline(report), "");
+
+  const estimated = report.estimates
+    .filter((e): e is Estimated => e.status === "estimated")
+    .sort(byImpact);
+  const notEstimated = report.estimates.filter((e): e is NotEstimated => e.status !== "estimated");
+
+  const body: string[] = [];
+  let length = [...head, tail].join("\n").length + OVERFLOW_RESERVE;
+  const fits = (lines: readonly string[]): boolean => {
+    const added = lines.reduce((sum, line) => sum + line.length + 1, 0);
+    if (length + added > maxLength) return false;
+    length += added;
+    return true;
+  };
+
+  const shown: Estimated[] = [];
+  const tableHeader = [
+    "| Model | Change | Scanned per run (before → after) | Runs / day | Monthly estimate |",
+    "|---|---|---|--:|--:|",
+  ];
+  if (estimated.length > 0 && fits([...tableHeader, ""])) {
     for (const e of estimated) {
-      const monthly =
-        e.pricePerTib === 0 ? "bytes only" : formatUsd(e.monthlyDelta, { signed: true });
-      lines.push(
-        `| \`${e.name}\` | ${e.kind} | ${formatBytes(e.baseBytes)} → ${formatBytes(e.headBytes)} | ${String(e.runsPerDay)} | ${monthly} |`,
-      );
+      if (!fits([row(e)])) break;
+      shown.push(e);
     }
-    lines.push("");
+    body.push(...tableHeader, ...shown.map(row), "");
 
-    const notes = estimated.flatMap((e) => [
-      ...(e.likelyCause === undefined
-        ? []
-        : [`- \`${e.name}\`: likely cause: ${causeText(e.likelyCause)}.`]),
-      ...(e.fullRefreshBytes === undefined
-        ? []
-        : [
-            `- \`${e.name}\`: incremental, estimated from its incremental query. A full refresh would scan up to ${formatBytes(e.fullRefreshBytes)}, not included in the monthly estimate.`,
-          ]),
-    ]);
-    if (notes.length > 0) lines.push(...notes, "");
+    const notes: string[] = [];
+    for (const e of shown) {
+      const lines = notesFor(e);
+      if (lines.length === 0) continue;
+      if (!fits(lines)) break;
+      notes.push(...lines);
+    }
+    if (notes.length > 0 && fits([""])) body.push(...notes, "");
   }
 
-  if (notEstimated.length > 0) {
-    lines.push("**Not estimated**", "");
-    for (const e of notEstimated) lines.push(`- \`${e.name}\` (${e.kind}): ${e.reason}`);
-    lines.push("");
+  let listed = 0;
+  if (notEstimated.length > 0 && fits(["**Not estimated**", "", ""])) {
+    const items: string[] = [];
+    for (const e of notEstimated) {
+      const line = `- \`${e.name}\` (${e.kind}): ${e.reason}`;
+      if (!fits([line])) break;
+      items.push(line);
+    }
+    listed = items.length;
+    if (listed > 0) body.push("**Not estimated**", "", ...items, "");
   }
 
-  lines.push(footer(report));
-  return lines.join("\n") + "\n";
+  const omitted = report.estimates.length - shown.length - listed;
+  if (omitted > 0) {
+    const models = omitted === 1 ? "1 more model" : `${String(omitted)} more models`;
+    body.push(
+      `…and ${models}, left out to keep this comment within GitHub's size limit. ${fullReportAt}`,
+      "",
+    );
+  }
+
+  return [...head, ...body, tail].join("\n") + "\n";
+}
+
+/** Largest change in the estimate first; byte change breaks ties (e.g. models at 0 per TiB). */
+function byImpact(a: Estimated, b: Estimated): number {
+  return (
+    Math.abs(b.monthlyDelta) - Math.abs(a.monthlyDelta) ||
+    Math.abs(b.headBytes - b.baseBytes) - Math.abs(a.headBytes - a.baseBytes)
+  );
+}
+
+function row(e: Estimated): string {
+  const monthly = e.pricePerTib === 0 ? "bytes only" : formatUsd(e.monthlyDelta, { signed: true });
+  return `| \`${e.name}\` | ${e.kind} | ${formatBytes(e.baseBytes)} → ${formatBytes(e.headBytes)} | ${String(e.runsPerDay)} | ${monthly} |`;
+}
+
+function notesFor(e: Estimated): string[] {
+  return [
+    ...(e.likelyCause === undefined
+      ? []
+      : [`- \`${e.name}\`: likely cause: ${causeText(e.likelyCause)}.`]),
+    ...(e.fullRefreshBytes === undefined
+      ? []
+      : [
+          `- \`${e.name}\`: incremental, estimated from its incremental query. A full refresh would scan up to ${formatBytes(e.fullRefreshBytes)}, not included in the monthly estimate.`,
+        ]),
+  ];
 }
 
 function headline(report: Report): string {

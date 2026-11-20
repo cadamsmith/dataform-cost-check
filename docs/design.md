@@ -125,7 +125,13 @@ reports "not estimated" with a reason.
   missing, models carry no location and the dry run sends none, so BigQuery picks the
   location from the datasets the query reads. Falling back to `US` was rejected: it would
   make every dry run in an EU or regional project fail with an unclear error.
-- **Slot-based pricing.** Bytes do not map to dollars. The comment says so.
+- **Slot-based pricing.** Bytes do not map to dollars. The comment says so. A team can
+  set `price_per_tib: 0` (or 0 for a location) to say so in config. A model priced at 0
+  shows bytes scanned and "bytes only" instead of dollars, and is left out of the dollar
+  figure. When every estimated model is at 0, the headline says bytes are shown, not
+  dollars, and a set `limit_monthly` is reported as unable to apply (in the comment and as
+  a warning) instead of passing silently. No bytes-based limit: v1 keeps one spending
+  limit. Chosen in #26.
 - **Estimate is an upper bound.** Say "estimate", never "cost". Do not deduct the monthly
   free tier.
 - **Partition filter detection.** A heuristic, surfaced as `Estimate.likelyCause` with the

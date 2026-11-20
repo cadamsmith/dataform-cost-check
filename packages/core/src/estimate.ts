@@ -143,6 +143,7 @@ export async function estimateChange(
   }
 
   const runsPerDay = runsPerDayFor(model, config);
+  const pricePerTib = pricePerTibFor(model, config);
   const likelyCause = partitionFilterCause(baseResult, headResult);
   return {
     status: "estimated",
@@ -150,12 +151,8 @@ export async function estimateChange(
     baseBytes: baseResult.bytes,
     headBytes: headResult.bytes,
     runsPerDay,
-    monthlyDelta: monthlyDelta(
-      baseResult.bytes,
-      headResult.bytes,
-      pricePerTibFor(model, config),
-      runsPerDay,
-    ),
+    pricePerTib,
+    monthlyDelta: monthlyDelta(baseResult.bytes, headResult.bytes, pricePerTib, runsPerDay),
     ...(likelyCause !== undefined && { likelyCause }),
     ...(fullRefreshResult !== undefined &&
       "bytes" in fullRefreshResult && { fullRefreshBytes: fullRefreshResult.bytes }),
@@ -173,6 +170,19 @@ export async function estimateChanges(
     changes.map((c) => estimateChange(c, runner, config, newTargets)),
   );
   return buildReport(estimates, config);
+}
+
+/**
+ * True when no estimated model has a dollar price, so a spending limit cannot fire. False
+ * when nothing was estimated: there is simply nothing to compare.
+ */
+export function limitCannotApply(report: Report): boolean {
+  const estimated = report.estimates.filter((e) => e.status === "estimated");
+  return (
+    report.limitMonthly !== null &&
+    estimated.length > 0 &&
+    estimated.every((e) => e.pricePerTib === 0)
+  );
 }
 
 /** Total the estimates and apply the limit. Pure. */

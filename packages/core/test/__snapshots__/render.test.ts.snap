@@ -61,3 +61,17 @@ None of the changed models were estimated.
 <sub>Estimates are upper bounds from BigQuery dry runs, priced at $6.25 per TiB on-demand, with no free-tier deduction. If this project uses slot-based (Editions) pricing, bytes scanned do not map to dollars and these figures do not apply.</sub>
 "
 `;
+
+exports[`renderComment at 0 per TiB > shows bytes, not dollars, and says the limit cannot apply 1`] = `
+"<!-- dataform-cost-check -->
+### Dataform Cost Check: BigQuery estimate
+
+These models are priced at 0 per TiB (for example, slot-based pricing), so bytes scanned are shown, not dollars. The $100.00 limit cannot apply.
+
+| Model | Change | Scanned per run (before → after) | Runs / day | Monthly estimate |
+|---|---|---|--:|--:|
+| \`slots_model\` | added | 0 B → 5.00 GiB | 1 | bytes only |
+
+<sub>Estimates are upper bounds from BigQuery dry runs, priced at 0 per TiB (bytes only) on-demand, with no free-tier deduction. If this project uses slot-based (Editions) pricing, bytes scanned do not map to dollars and these figures do not apply.</sub>
+"
+`;

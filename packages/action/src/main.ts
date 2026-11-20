@@ -2,7 +2,12 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import * as core from "@actions/core";
 import { BigQueryDryRunner } from "@dataform-cost-check/bigquery";
-import { COMMENT_MARKER, DEFAULT_CONFIG, limitConcurrency } from "@dataform-cost-check/core";
+import {
+  COMMENT_MARKER,
+  DEFAULT_CONFIG,
+  limitCannotApply,
+  limitConcurrency,
+} from "@dataform-cost-check/core";
 import type { Model } from "@dataform-cost-check/core";
 import { loadModels } from "@dataform-cost-check/dataform";
 import { resolveBaseRef, withBaseWorktree } from "./base-checkout.ts";
@@ -74,6 +79,12 @@ async function main(): Promise<void> {
   core.setOutput("monthly-delta", report.totalMonthlyDelta.toFixed(2));
   core.setOutput("over-limit", String(report.overLimit));
   await postComment(pr, comment);
+
+  if (limitCannotApply(report)) {
+    core.warning(
+      "limit_monthly is set, but every estimated model is priced at 0 per TiB, so the limit cannot apply.",
+    );
+  }
 
   const failure = dryRunFailure(report);
   if (failure !== undefined) {

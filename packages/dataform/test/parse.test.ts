@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { DataformCompilationError, parseCompileOutput } from "../src/index.ts";
+import { DataformCompilationError, parseCliJson, parseCompileOutput } from "../src/index.ts";
 
 /** Real `dataform compile --json` output (CLI 3.0.61) from fixtures/sample-project. */
 const sample: unknown = JSON.parse(
@@ -141,5 +141,26 @@ describe("parseCompileOutput on incremental models with a unique key", () => {
       for (const t of o.tables as Record<string, unknown>[]) delete t.uniqueKey;
     });
     expect(inc(noKey)?.merge).toBeUndefined();
+  });
+});
+
+describe("Dataform 2.x", () => {
+  /** Real stdout of `dataform compile --json` from CLI and core 2.9.0 (a dataform.json project). */
+  const stdout = readFileSync(new URL("fixtures/v2-cli-stdout.txt", import.meta.url), "utf8");
+
+  it("skips the log line the 2.x CLI prints before the JSON", () => {
+    expect(stdout.startsWith('{"level":"INFO"')).toBe(true);
+    const models = parseCompileOutput(parseCliJson(stdout));
+    expect(models.map((m) => [m.name, m.type]).sort()).toEqual([
+      ["js_table", "table"],
+      ["orders", "incremental"],
+    ]);
+    const orders = models.find((m) => m.name === "orders");
+    expect(orders?.location).toBe("US");
+    expect(orders?.incrementalPreOps?.[0]).toContain("DECLARE checkpoint");
+  });
+
+  it("still rejects output that is not JSON at all", () => {
+    expect(() => parseCliJson("Dataform encountered an error")).toThrow();
   });
 });

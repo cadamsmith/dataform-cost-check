@@ -124,9 +124,24 @@ function compilationErrors(output: unknown): readonly CompilationErrorEntry[] {
 function compilationErrorsIn(stdout: string | undefined): readonly CompilationErrorEntry[] {
   if (!stdout) return [];
   try {
-    return compilationErrors(JSON.parse(stdout));
+    return compilationErrors(parseCliJson(stdout));
   } catch {
     return [];
+  }
+}
+
+/**
+ * The JSON document in the CLI's output. The Dataform 2.x CLI prints a one-line JSON log
+ * message before it, so when the whole output does not parse, the document is taken to
+ * start at the first line that is a lone `{`.
+ */
+export function parseCliJson(stdout: string): unknown {
+  try {
+    return JSON.parse(stdout);
+  } catch (error) {
+    const start = stdout.search(/^\{\s*$/m);
+    if (start <= 0) throw error;
+    return JSON.parse(stdout.slice(start));
   }
 }
 
@@ -160,7 +175,7 @@ export async function compileProject(options: CompileOptions): Promise<unknown> 
     if (errors.length > 0) throw new DataformCompilationError(errors);
     throw err;
   }
-  const output: unknown = JSON.parse(stdout);
+  const output: unknown = parseCliJson(stdout);
   const errors = compilationErrors(output);
   if (errors.length > 0) throw new DataformCompilationError(errors);
   return output;

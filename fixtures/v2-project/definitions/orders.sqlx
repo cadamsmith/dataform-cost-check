@@ -1,0 +1,7 @@
+config { type: "incremental", tags: ["daily"] }
+
+pre_operations {
+  DECLARE checkpoint DATE DEFAULT CURRENT_DATE();
+}
+
+SELECT * FROM `cost-check-sample.raw.orders` WHERE day > checkpoint

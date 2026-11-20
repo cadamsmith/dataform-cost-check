@@ -62,8 +62,8 @@ other SQL sources can be added later without a rewrite.
 
 ## Releases
 
-Merge a version bump (the four `packages/*/package.json` files, the log line in
-`packages/action/src/main.ts`, README and SECURITY.md), then push an annotated tag
-`vX.Y.Z`. The release workflow re-runs `pnpm check`, refuses to release if `dist/` does not
+Run `pnpm release X.Y.Z`: it bumps every place the version lives (the four
+`packages/*/package.json` files, the log line, README and SECURITY.md), then checks and
+builds. Merge that as a PR, then push an annotated tag `vX.Y.Z` on `main`. The release workflow re-runs `pnpm check`, refuses to release if `dist/` does not
 match a fresh build, attests `dist/index.cjs` once the repository is public, and creates
-the GitHub release. Users pin the tag's full commit SHA.
+the GitHub release, and moves the major tag (`v0`). Users should pin the tag's full commit SHA.

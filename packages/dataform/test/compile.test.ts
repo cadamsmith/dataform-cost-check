@@ -7,6 +7,7 @@ import { join } from "node:path";
 import {
   DataformCliNotFoundError,
   DataformDependenciesMissingError,
+  compileArgs,
   compileProject,
   loadModels,
 } from "../src/index.ts";
@@ -47,5 +48,17 @@ describe("compileProject", () => {
       "orders_daily",
       "orders_recent",
     ]);
+  });
+});
+
+describe("compileArgs", () => {
+  it("compiles with workflow_settings.yaml alone by default", () => {
+    expect(compileArgs()).toEqual(["compile", "--json"]);
+  });
+
+  it("passes release-config overrides to the CLI, skipping empty ones", () => {
+    expect(
+      compileArgs({ defaultDatabase: "prod-proj", schemaSuffix: "", vars: "env=prod,days=7" }),
+    ).toEqual(["compile", "--json", "--default-database=prod-proj", "--vars=env=prod,days=7"]);
   });
 });

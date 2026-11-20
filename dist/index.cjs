@@ -45885,6 +45885,7 @@ async function estimateChange(change, runner, config, newTargets = /* @__PURE__ 
     return { ...common, ...dryRunFailed("head", headResult) };
   }
   const runsPerDay = runsPerDayFor(model, config);
+  const pricePerTib = pricePerTibFor(model, config);
   const likelyCause = partitionFilterCause(baseResult, headResult);
   return {
     status: "estimated",
@@ -45892,12 +45893,8 @@ async function estimateChange(change, runner, config, newTargets = /* @__PURE__ 
     baseBytes: baseResult.bytes,
     headBytes: headResult.bytes,
     runsPerDay,
-    monthlyDelta: monthlyDelta(
-      baseResult.bytes,
-      headResult.bytes,
-      pricePerTibFor(model, config),
-      runsPerDay
-    ),
+    pricePerTib,
+    monthlyDelta: monthlyDelta(baseResult.bytes, headResult.bytes, pricePerTib, runsPerDay),
     ...likelyCause !== void 0 && { likelyCause },
     ...fullRefreshResult !== void 0 && "bytes" in fullRefreshResult && { fullRefreshBytes: fullRefreshResult.bytes }
   };
@@ -45908,6 +45905,10 @@ async function estimateChanges(changes, runner, config) {
     changes.map((c) => estimateChange(c, runner, config, newTargets))
   );
   return buildReport(estimates, config);
+}
+function limitCannotApply(report) {
+  const estimated = report.estimates.filter((e2) => e2.status === "estimated");
+  return report.limitMonthly !== null && estimated.length > 0 && estimated.every((e2) => e2.pricePerTib === 0);
 }
 function buildReport(estimates, config) {
   const totalMonthlyDelta = estimates.reduce(
@@ -45948,8 +45949,9 @@ function renderComment(report) {
       "|---|---|---|--:|--:|"
     );
     for (const e2 of estimated) {
+      const monthly = e2.pricePerTib === 0 ? "bytes only" : formatUsd(e2.monthlyDelta, { signed: true });
       lines.push(
-        `| \`${e2.name}\` | ${e2.kind} | ${formatBytes(e2.baseBytes)} \u2192 ${formatBytes(e2.headBytes)} | ${String(e2.runsPerDay)} | ${formatUsd(e2.monthlyDelta, { signed: true })} |`
+        `| \`${e2.name}\` | ${e2.kind} | ${formatBytes(e2.baseBytes)} \u2192 ${formatBytes(e2.headBytes)} | ${String(e2.runsPerDay)} | ${monthly} |`
       );
     }
     lines.push("");
@@ -45971,10 +45973,17 @@ function renderComment(report) {
 }
 function headline(report) {
   const total = report.totalMonthlyDelta;
-  const hasEstimates = report.estimates.some((e2) => e2.status === "estimated");
+  const estimated = report.estimates.filter((e2) => e2.status === "estimated");
+  const unpriced = estimated.filter((e2) => e2.pricePerTib === 0).length;
   let text;
-  if (!hasEstimates) text = "None of the changed models were estimated.";
-  else if (total > 0)
+  if (estimated.length === 0) text = "None of the changed models were estimated.";
+  else if (unpriced === estimated.length) {
+    text = "These models are priced at 0 per TiB (for example, slot-based pricing), so bytes scanned are shown, not dollars.";
+    if (report.limitMonthly !== null) {
+      text += ` The ${formatUsd(report.limitMonthly)} limit cannot apply.`;
+    }
+    return text;
+  } else if (total > 0)
     text = `This change adds an estimated **${formatUsd(total, { signed: true })} / month**.`;
   else if (total < 0) text = `This change saves an estimated **${formatUsd(-total)} / month**.`;
   else text = "This change does not move the monthly estimate.";
@@ -45982,18 +45991,25 @@ function headline(report) {
     const limit = formatUsd(report.limitMonthly);
     text += report.overLimit ? ` :x: Over the ${limit} limit.` : ` Within the ${limit} limit.`;
   }
+  if (unpriced > 0) {
+    const models = unpriced === 1 ? "1 model is" : `${String(unpriced)} models are`;
+    text += ` ${models} priced at 0 per TiB and left out of the dollar figure; bytes are shown for them.`;
+  }
   return text;
 }
 function footer(report) {
   const byLocation = Object.entries(report.pricePerTibByLocation ?? {}).map(
-    ([location, price2]) => `${formatUsd(price2)} in ${location}`
+    ([location, price2]) => `${price2 === 0 ? "0 (bytes only)" : formatUsd(price2)} in ${location}`
   );
-  const price = byLocation.length === 0 ? `${formatUsd(report.pricePerTib)} per TiB on-demand` : `${formatUsd(report.pricePerTib)} per TiB on-demand (${byLocation.join(", ")})`;
+  const price = byLocation.length === 0 ? `${perTib(report.pricePerTib)} on-demand` : `${perTib(report.pricePerTib)} on-demand (${byLocation.join(", ")})`;
   return [
     `<sub>Estimates are upper bounds from BigQuery dry runs, priced at ${price}, `,
     "with no free-tier deduction. If this project uses slot-based (Editions) pricing, bytes scanned ",
     "do not map to dollars and these figures do not apply.</sub>"
   ].join("");
+}
+function perTib(price) {
+  return price === 0 ? "0 per TiB (bytes only)" : `${formatUsd(price)} per TiB`;
 }
 function formatBytes(bytes) {
   if (bytes === 0) return "0 B";
@@ -46364,6 +46380,11 @@ async function main() {
   setOutput("monthly-delta", report.totalMonthlyDelta.toFixed(2));
   setOutput("over-limit", String(report.overLimit));
   await postComment(pr, comment);
+  if (limitCannotApply(report)) {
+    warning(
+      "limit_monthly is set, but every estimated model is priced at 0 per TiB, so the limit cannot apply."
+    );
+  }
   const failure = dryRunFailure(report);
   if (failure !== void 0) {
     setFailed(failure);

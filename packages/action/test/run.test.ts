@@ -54,6 +54,7 @@ describe("dryRunFailure", () => {
     baseBytes: 0,
     headBytes: 0,
     runsPerDay: 1,
+    pricePerTib: 6.25,
     monthlyDelta: 0,
   } as const;
   const failed = {

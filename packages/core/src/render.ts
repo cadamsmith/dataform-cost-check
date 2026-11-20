@@ -33,8 +33,10 @@ export function renderComment(report: Report): string {
       "|---|---|---|--:|--:|",
     );
     for (const e of estimated) {
+      const monthly =
+        e.pricePerTib === 0 ? "bytes only" : formatUsd(e.monthlyDelta, { signed: true });
       lines.push(
-        `| \`${e.name}\` | ${e.kind} | ${formatBytes(e.baseBytes)} → ${formatBytes(e.headBytes)} | ${String(e.runsPerDay)} | ${formatUsd(e.monthlyDelta, { signed: true })} |`,
+        `| \`${e.name}\` | ${e.kind} | ${formatBytes(e.baseBytes)} → ${formatBytes(e.headBytes)} | ${String(e.runsPerDay)} | ${monthly} |`,
       );
     }
     lines.push("");
@@ -64,10 +66,18 @@ export function renderComment(report: Report): string {
 
 function headline(report: Report): string {
   const total = report.totalMonthlyDelta;
-  const hasEstimates = report.estimates.some((e) => e.status === "estimated");
+  const estimated = report.estimates.filter((e): e is Estimated => e.status === "estimated");
+  const unpriced = estimated.filter((e) => e.pricePerTib === 0).length;
   let text: string;
-  if (!hasEstimates) text = "None of the changed models were estimated.";
-  else if (total > 0)
+  if (estimated.length === 0) text = "None of the changed models were estimated.";
+  else if (unpriced === estimated.length) {
+    text =
+      "These models are priced at 0 per TiB (for example, slot-based pricing), so bytes scanned are shown, not dollars.";
+    if (report.limitMonthly !== null) {
+      text += ` The ${formatUsd(report.limitMonthly)} limit cannot apply.`;
+    }
+    return text;
+  } else if (total > 0)
     text = `This change adds an estimated **${formatUsd(total, { signed: true })} / month**.`;
   else if (total < 0) text = `This change saves an estimated **${formatUsd(-total)} / month**.`;
   else text = "This change does not move the monthly estimate.";
@@ -76,22 +86,31 @@ function headline(report: Report): string {
     const limit = formatUsd(report.limitMonthly);
     text += report.overLimit ? ` :x: Over the ${limit} limit.` : ` Within the ${limit} limit.`;
   }
+  if (unpriced > 0) {
+    const models = unpriced === 1 ? "1 model is" : `${String(unpriced)} models are`;
+    text += ` ${models} priced at 0 per TiB and left out of the dollar figure; bytes are shown for them.`;
+  }
   return text;
 }
 
 function footer(report: Report): string {
   const byLocation = Object.entries(report.pricePerTibByLocation ?? {}).map(
-    ([location, price]) => `${formatUsd(price)} in ${location}`,
+    ([location, price]) => `${price === 0 ? "0 (bytes only)" : formatUsd(price)} in ${location}`,
   );
   const price =
     byLocation.length === 0
-      ? `${formatUsd(report.pricePerTib)} per TiB on-demand`
-      : `${formatUsd(report.pricePerTib)} per TiB on-demand (${byLocation.join(", ")})`;
+      ? `${perTib(report.pricePerTib)} on-demand`
+      : `${perTib(report.pricePerTib)} on-demand (${byLocation.join(", ")})`;
   return [
     `<sub>Estimates are upper bounds from BigQuery dry runs, priced at ${price}, `,
     "with no free-tier deduction. If this project uses slot-based (Editions) pricing, bytes scanned ",
     "do not map to dollars and these figures do not apply.</sub>",
   ].join("");
+}
+
+/** A configured price, where 0 means "bytes only, no dollars". */
+function perTib(price: number): string {
+  return price === 0 ? "0 per TiB (bytes only)" : `${formatUsd(price)} per TiB`;
 }
 
 /** Human-readable binary size, e.g. `1.24 TiB`. */

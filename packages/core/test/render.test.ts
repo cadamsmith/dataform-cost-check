@@ -19,6 +19,7 @@ const ordersDaily: Estimate = {
   baseBytes: 0.04 * TIB,
   headBytes: 1.24 * TIB,
   runsPerDay: 30,
+  pricePerTib: 6.25,
   monthlyDelta: 6750,
   likelyCause: { kind: "partition-filter-removed", table: "proj.raw.orders" },
   fullRefreshBytes: 3.1 * TIB,
@@ -33,6 +34,7 @@ const customers: Estimate = {
   baseBytes: 0,
   headBytes: 5 * 1024 ** 3,
   runsPerDay: 1,
+  pricePerTib: 6.25,
   monthlyDelta: 0.92,
 };
 
@@ -143,6 +145,34 @@ describe("formatUsd", () => {
     [-0.001, false, "-<$0.01"],
   ])("formats %d (signed: %s) as %s", (amount, signed, expected) => {
     expect(formatUsd(amount, { signed })).toBe(expected);
+  });
+});
+
+describe("renderComment at 0 per TiB", () => {
+  const unpriced: Estimate = { ...customers, name: "slots_model", pricePerTib: 0, monthlyDelta: 0 };
+
+  it("shows bytes, not dollars, and says the limit cannot apply", () => {
+    const body = renderComment(
+      report({ estimates: [unpriced], pricePerTib: 0, limitMonthly: 100 }),
+    );
+    expect(body).toMatchSnapshot();
+    expect(body).not.toContain("$0.00");
+    expect(body).not.toContain("does not move the monthly estimate");
+    expect(body).toContain("The $100.00 limit cannot apply.");
+    expect(body).toContain("| bytes only |");
+  });
+
+  it("leaves models at 0 per TiB out of a mixed dollar figure, and says so", () => {
+    const body = renderComment(
+      report({
+        estimates: [customers, unpriced],
+        totalMonthlyDelta: 0.92,
+        pricePerTibByLocation: { EU: 0 },
+      }),
+    );
+    expect(body).toContain("adds an estimated **+$0.92 / month**.");
+    expect(body).toContain("1 model is priced at 0 per TiB and left out of the dollar figure");
+    expect(body).toContain("(0 (bytes only) in EU)");
   });
 });
 

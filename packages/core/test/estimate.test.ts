@@ -8,6 +8,7 @@ import {
   buildReport,
   estimateChange,
   estimateChanges,
+  limitCannotApply,
   partitionFilterCause,
   readsNewTarget,
 } from "../src/index.ts";
@@ -144,6 +145,7 @@ describe("buildReport", () => {
     baseBytes: 0,
     headBytes: 0,
     runsPerDay: 1,
+    pricePerTib: 6.25,
     monthlyDelta,
   });
   const skipped: Estimate = {
@@ -294,5 +296,39 @@ describe("region pricing", () => {
       pricePerTibByLocation: { "asia-northeast1": 10 },
     });
     expect(e).toMatchObject({ monthlyDelta: 300 });
+  });
+});
+
+describe("limitCannotApply", () => {
+  const priced = (pricePerTib: number): Estimate => ({
+    status: "estimated",
+    target: "t",
+    name: "t",
+    kind: "modified",
+    type: "table",
+    baseBytes: 0,
+    headBytes: 1024,
+    runsPerDay: 1,
+    pricePerTib,
+    monthlyDelta: 0,
+  });
+  const at = (estimates: Estimate[], limitMonthly: number | null) =>
+    buildReport(estimates, { ...config, limitMonthly });
+
+  it("is true only when a limit is set and every estimated model is priced at 0", () => {
+    expect(limitCannotApply(at([priced(0)], 100))).toBe(true);
+    expect(limitCannotApply(at([priced(0), priced(6.25)], 100))).toBe(false);
+    expect(limitCannotApply(at([priced(0)], null))).toBe(false);
+    expect(limitCannotApply(at([], 100))).toBe(false);
+  });
+
+  it("carries the model's price on the estimate", async () => {
+    const m = model({ name: "t", query: "q", location: "EU" });
+    const e = await estimateChange(
+      { kind: "added", target: m.target, head: m },
+      new FakeDryRunner([["q", { bytes: BYTES_PER_TIB }]]),
+      { ...config, pricePerTibByLocation: { eu: 0 } },
+    );
+    expect(e).toMatchObject({ status: "estimated", pricePerTib: 0, monthlyDelta: 0 });
   });
 });

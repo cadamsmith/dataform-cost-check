@@ -99,6 +99,11 @@ export type Estimate =
       /** Bytes per run at head; 0 for removed models. */
       readonly headBytes: number;
       readonly runsPerDay: number;
+      /**
+       * USD per TiB this model was priced at. 0 means bytes do not map to dollars here
+       * (for example, slot-based pricing): the comment shows bytes, not dollars.
+       */
+      readonly pricePerTib: number;
       /** Head minus base, in USD per month. An upper-bound estimate. */
       readonly monthlyDelta: number;
       readonly likelyCause?: LikelyCause;

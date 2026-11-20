@@ -46394,7 +46394,9 @@ function dryRunFailure(report) {
   const failed = tried.filter((e2) => e2.status === "unestimable");
   const first = failed[0];
   if (first === void 0 || failed.length < tried.length) return void 0;
-  return `No changed model could be estimated (${String(failed.length)} tried). Check the Google Cloud project and permissions. First error, for ${first.name}: ${first.reason}`;
+  const setup = first.errorKind === void 0 || first.errorKind === "permission-denied" || first.errorKind === "api-disabled" || first.errorKind === "unknown";
+  const hint = setup ? "Check the Google Cloud project and permissions." : "BigQuery's message is in the job log.";
+  return `No changed model could be estimated (${String(failed.length)} tried). ${hint} First error, for ${first.name}: ${first.reason}`;
 }
 function dropsRequiredFilter(e2) {
   return e2.status === "unestimable" && e2.reason.startsWith(PARTITION_FILTER_REQUIRED_REASON);

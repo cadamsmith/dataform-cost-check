@@ -58,9 +58,19 @@ export function dryRunFailure(report: Report): string | undefined {
   const failed = tried.filter((e) => e.status === "unestimable");
   const first = failed[0];
   if (first === undefined || failed.length < tried.length) return undefined;
+  // Blame project setup only for failures that point at it. A query BigQuery rejects, or
+  // a table it cannot find, is about the change itself.
+  const setup =
+    first.errorKind === undefined ||
+    first.errorKind === "permission-denied" ||
+    first.errorKind === "api-disabled" ||
+    first.errorKind === "unknown";
+  const hint = setup
+    ? "Check the Google Cloud project and permissions."
+    : "BigQuery's message is in the job log.";
   return (
-    `No changed model could be estimated (${String(failed.length)} tried). ` +
-    `Check the Google Cloud project and permissions. First error, for ${first.name}: ${first.reason}`
+    `No changed model could be estimated (${String(failed.length)} tried). ${hint} ` +
+    `First error, for ${first.name}: ${first.reason}`
   );
 }
 

@@ -45817,6 +45817,13 @@ function indexByTarget(models, side) {
 
 // ../core/src/render.ts
 var COMMENT_MARKER = "<!-- dataform-cost-check -->";
+function commentMarker(projectDir = ".") {
+  const dir = normalizeDir(projectDir);
+  return dir === "" ? COMMENT_MARKER : `<!-- dataform-cost-check:${dir} -->`;
+}
+function normalizeDir(projectDir) {
+  return projectDir.replace(/^\.\/+/, "").replace(/\/+$/, "").replace(/^\.$/, "").replace(/--/g, "-");
+}
 var UNITS = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"];
 function causeText(cause) {
   return `a filter on the partitioned table \`${cause.table}\` was removed`;
@@ -45825,9 +45832,12 @@ var COMMENT_MAX_LENGTH = 6e4;
 var OVERFLOW_RESERVE = 200;
 function renderComment(report, {
   maxLength = COMMENT_MAX_LENGTH,
-  fullReportAt = "The job summary has the full report."
+  fullReportAt = "The job summary has the full report.",
+  projectDir = "."
 } = {}) {
-  const head = [COMMENT_MARKER, "### Dataform Cost Check: BigQuery estimate", ""];
+  const dir = normalizeDir(projectDir);
+  const title = `### Dataform Cost Check: BigQuery estimate${dir === "" ? "" : ` for \`${dir}\``}`;
+  const head = [commentMarker(projectDir), title, ""];
   const tail = footer(report);
   if (report.estimates.length === 0) {
     return [
@@ -45934,7 +45944,8 @@ function footer(report) {
   const price = byLocation.length === 0 ? `${perTib(report.pricePerTib)} on-demand` : `${perTib(report.pricePerTib)} on-demand (${byLocation.join(", ")})`;
   return [
     `<sub>Estimates are upper bounds from BigQuery dry runs, priced at ${price}, `,
-    "with no free-tier deduction. If this project uses slot-based (Editions) pricing, bytes scanned ",
+    "with no free-tier deduction. Runs per day come from `dataform-cost-check.yml`, not from your ",
+    "schedules. If this project uses slot-based (Editions) pricing, bytes scanned ",
     "do not map to dollars and these figures do not apply.</sub>"
   ].join("");
 }
@@ -46451,14 +46462,16 @@ var SUMMARY_MAX_LENGTH = 9e5;
 async function runCheck(deps) {
   const [base, head] = await Promise.all([deps.loadModels("base"), deps.loadModels("head")]);
   const report = await estimateChanges(diffModels(base, head), deps.runner, deps.config);
+  const projectDir = deps.projectDir ?? ".";
   return {
     report,
-    comment: renderComment(report),
+    comment: renderComment(report, { projectDir }),
     summary: renderComment(report, {
       maxLength: SUMMARY_MAX_LENGTH,
-      fullReportAt: "The job log has the full report."
+      fullReportAt: "The job log has the full report.",
+      projectDir
     }),
-    full: renderComment(report, { maxLength: Number.POSITIVE_INFINITY })
+    full: renderComment(report, { maxLength: Number.POSITIVE_INFINITY, projectDir })
   };
 }
 function dryRunFailure(report) {
@@ -46525,6 +46538,7 @@ async function main() {
   const { report, comment, summary: summary2, full } = await runCheck({
     config,
     loadModels: load,
+    projectDir,
     runner: limitConcurrency(new BigQueryDryRunner({ projectId }), MAX_CONCURRENT_DRY_RUNS)
   });
   info(full);
@@ -46535,7 +46549,7 @@ async function main() {
   await summary.addRaw(summary2).write();
   setOutput("monthly-delta", report.totalMonthlyDelta.toFixed(2));
   setOutput("over-limit", String(report.overLimit));
-  await postComment(pr, comment);
+  await postComment(pr, comment, projectDir);
   if (limitCannotApply(report)) {
     warning(
       "limit_monthly is set, but every estimated model is priced at 0 per TiB, so the limit cannot apply."
@@ -46548,7 +46562,7 @@ async function main() {
     setFailed("Estimated monthly spend change is over the configured limit.");
   }
 }
-async function postComment(pr, body) {
+async function postComment(pr, body, projectDir) {
   const token = getInput("github-token");
   if (pr === void 0 || !token) {
     info("Not a pull request run, or no github-token: report is in the job summary only.");
@@ -46559,7 +46573,7 @@ async function postComment(pr, body) {
       token,
       pr,
       body,
-      marker: COMMENT_MARKER,
+      marker: commentMarker(projectDir),
       apiUrl: process.env.GITHUB_API_URL
     });
     info(`Comment ${action}: ${url}`);

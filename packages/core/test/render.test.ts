@@ -3,6 +3,7 @@ import {
   BYTES_PER_TIB,
   COMMENT_MARKER,
   COMMENT_MAX_LENGTH,
+  commentMarker,
   formatBytes,
   formatUsd,
   renderComment,
@@ -123,7 +124,7 @@ describe("renderComment", () => {
     expect(body.startsWith(COMMENT_MARKER)).toBe(true);
     expect(body).toContain("estimate");
     // The product name contains "cost"; the rule is about how the figures are described.
-    const afterTitle = body.split("\n").slice(2).join("\n");
+    const afterTitle = body.split("\n").slice(2).join("\n").replaceAll("dataform-cost-check", "");
     expect(afterTitle).not.toMatch(/\bcosts?\b/i);
     expect(body).toContain("slot-based (Editions) pricing");
   });
@@ -227,6 +228,30 @@ describe("renderComment at 0 per TiB", () => {
     expect(body).toContain("adds an estimated **+$0.92 / month**.");
     expect(body).toContain("1 model is priced at 0 per TiB and left out of the dollar figure");
     expect(body).toContain("(0 (bytes only) in EU)");
+  });
+});
+
+describe("commentMarker and monorepos", () => {
+  it("keeps the plain marker for the root project", () => {
+    expect(commentMarker()).toBe(COMMENT_MARKER);
+    expect(commentMarker(".")).toBe(COMMENT_MARKER);
+    expect(commentMarker("./")).toBe(COMMENT_MARKER);
+  });
+
+  it("gives each project directory its own marker and title", () => {
+    expect(commentMarker("./analytics/")).toBe("<!-- dataform-cost-check:analytics -->");
+    expect(commentMarker("a/b")).not.toBe(commentMarker("a"));
+    const body = renderComment(report({}), { projectDir: "analytics" });
+    expect(body.startsWith("<!-- dataform-cost-check:analytics -->")).toBe(true);
+    expect(body).toContain("### Dataform Cost Check: BigQuery estimate for `analytics`");
+    // A root project's comment must not be mistaken for a subproject's, or the reverse.
+    expect(body.startsWith(COMMENT_MARKER)).toBe(false);
+  });
+
+  it("says where runs per day come from", () => {
+    expect(renderComment(report({}))).toContain(
+      "Runs per day come from `dataform-cost-check.yml`, not from your schedules.",
+    );
   });
 });
 

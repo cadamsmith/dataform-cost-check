@@ -6,6 +6,24 @@ type NotEstimated = Exclude<Estimate, { status: "estimated" }>;
 /** Hidden marker the action uses to find and update its own sticky comment. */
 export const COMMENT_MARKER = "<!-- dataform-cost-check -->";
 
+/**
+ * The sticky-comment marker for one Dataform project. A repository with several projects
+ * runs one job per `project-dir`, and each keeps its own comment. The root project keeps
+ * the plain marker, so existing comments are still found.
+ */
+export function commentMarker(projectDir = "."): string {
+  const dir = normalizeDir(projectDir);
+  return dir === "" ? COMMENT_MARKER : `<!-- dataform-cost-check:${dir} -->`;
+}
+
+function normalizeDir(projectDir: string): string {
+  return projectDir
+    .replace(/^\.\/+/, "")
+    .replace(/\/+$/, "")
+    .replace(/^\.$/, "")
+    .replace(/--/g, "-");
+}
+
 const UNITS = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"] as const;
 
 /** One kind of cause so far: a lost partition filter. */
@@ -29,6 +47,8 @@ export interface RenderOptions {
   readonly maxLength?: number;
   /** Where the reader finds the rows left out, said after the count. */
   readonly fullReportAt?: string;
+  /** The Dataform project's directory, for repositories with several projects. */
+  readonly projectDir?: string;
 }
 
 /**
@@ -42,9 +62,12 @@ export function renderComment(
   {
     maxLength = COMMENT_MAX_LENGTH,
     fullReportAt = "The job summary has the full report.",
+    projectDir = ".",
   }: RenderOptions = {},
 ): string {
-  const head = [COMMENT_MARKER, "### Dataform Cost Check: BigQuery estimate", ""];
+  const dir = normalizeDir(projectDir);
+  const title = `### Dataform Cost Check: BigQuery estimate${dir === "" ? "" : ` for \`${dir}\``}`;
+  const head = [commentMarker(projectDir), title, ""];
   const tail = footer(report);
 
   if (report.estimates.length === 0) {
@@ -182,7 +205,8 @@ function footer(report: Report): string {
       : `${perTib(report.pricePerTib)} on-demand (${byLocation.join(", ")})`;
   return [
     `<sub>Estimates are upper bounds from BigQuery dry runs, priced at ${price}, `,
-    "with no free-tier deduction. If this project uses slot-based (Editions) pricing, bytes scanned ",
+    "with no free-tier deduction. Runs per day come from `dataform-cost-check.yml`, not from your ",
+    "schedules. If this project uses slot-based (Editions) pricing, bytes scanned ",
     "do not map to dollars and these figures do not apply.</sub>",
   ].join("");
 }

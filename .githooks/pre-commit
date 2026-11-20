@@ -1,0 +1,16 @@
+#!/bin/sh
+# Catch what CI would reject, before it costs a CI round: formatting and a stale dist/.
+# Installed by `pnpm install` (the `prepare` script sets core.hooksPath). Skip once with
+# `git commit --no-verify`.
+set -e
+
+if ! pnpm -s format:check >/dev/null 2>&1; then
+  echo "pre-commit: formatting is off. Run 'pnpm format', stage the changes, and commit again." >&2
+  exit 1
+fi
+
+pnpm -s build >/dev/null 2>&1
+if ! git diff --quiet -- dist; then
+  echo "pre-commit: dist/ was stale and has been rebuilt. Stage it (git add dist) and commit again." >&2
+  exit 1
+fi

@@ -88,6 +88,14 @@ reports "not estimated" with a reason.
   If only that dry run fails, the note is left out and the estimate stands. Known gap: a
   newly added incremental model's incremental query reads its own table, which does not
   exist yet, so it is reported as not estimated.
+- **Pre-operations.** Incremental models often `DECLARE` a checkpoint in
+  `pre_operations` and filter on it. A dry run of the query alone fails on the unknown
+  name, and a dry run of pre-operations plus query counted 0 bytes for the filtered
+  statement (measured 2026-11-20: 8.3 GB with a literal filter, 23.7 GB unfiltered). So a
+  model whose query uses a declared variable is reported as not estimated, naming the
+  variable (`core.preOpsVariableIn`), is never dry-run, and is left out of the "every
+  dry run fails" count. Pre-operations are part of the diff, so changing them alone
+  counts as a change.
 - **New upstream tables.** A dry run fails when the SQL references a table the same PR
   creates. Report it plainly as not estimated; do not guess. When a head dry run fails and
   the query quotes the target of a model the PR adds (`core.readsNewTarget`), the reason

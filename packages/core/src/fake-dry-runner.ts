@@ -11,7 +11,10 @@ export class FakeDryRunner implements DryRunner {
 
   constructor(
     results: Iterable<readonly [string, DryRunResult]> = [],
-    fallback: DryRunResult = { error: "FakeDryRunner has no result for this SQL" },
+    fallback: DryRunResult = {
+      error: "FakeDryRunner has no result for this SQL",
+      errorKind: "unknown",
+    },
   ) {
     this.#results = new Map(results);
     this.#fallback = fallback;

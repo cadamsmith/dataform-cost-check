@@ -40,3 +40,13 @@ export function dryRunFailure(report: Report): string | undefined {
     `Check the Google Cloud project and permissions. First error, for ${first.name}: ${first.reason}`
   );
 }
+
+/**
+ * BigQuery's own messages, one `model: message` line per failed dry run, for the job log
+ * only. They can quote the query, so they never go into the comment or the job summary.
+ */
+export function failureDetails(report: Report): string[] {
+  return report.estimates.flatMap((e) =>
+    e.status === "unestimable" && e.detail !== undefined ? [`${e.name}: ${e.detail}`] : [],
+  );
+}

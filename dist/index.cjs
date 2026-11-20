@@ -45628,6 +45628,21 @@ function info(message) {
 var import_google_auth_library = __toESM(require_src5(), 1);
 var BIGQUERY_SCOPE = "https://www.googleapis.com/auth/bigquery";
 var API_ROOT = "https://bigquery.googleapis.com/bigquery/v2";
+function classifyError(status, error2) {
+  const reasons = [...error2?.errors ?? [], ...error2?.details ?? []].map((e2) => e2.reason);
+  if (reasons.includes("accessNotConfigured") || reasons.includes("SERVICE_DISABLED")) {
+    return "api-disabled";
+  }
+  if (/without a filter over column/i.test(error2?.message ?? "")) {
+    return "partition-filter-required";
+  }
+  if (status === 404 || reasons.includes("notFound")) return "not-found";
+  if (status === 403 || reasons.includes("accessDenied")) return "permission-denied";
+  if (status === 400 || reasons.includes("invalidQuery") || reasons.includes("invalid")) {
+    return "query-error";
+  }
+  return "unknown";
+}
 function applicationDefaultToken() {
   const auth = new import_google_auth_library.GoogleAuth({ scopes: [BIGQUERY_SCOPE] });
   return async () => {
@@ -45672,11 +45687,14 @@ var BigQueryDryRunner = class {
       if (response.status === 401 || response.status === 429 || response.status >= 500) {
         throw new Error(`BigQuery dry run failed: ${message}`);
       }
-      return { error: message };
+      return { error: message, errorKind: classifyError(response.status, job.error) };
     }
     const bytes = job.statistics?.totalBytesProcessed ?? job.statistics?.query?.totalBytesProcessed;
     if (bytes === void 0 || !/^\d+$/.test(bytes)) {
-      return { error: "BigQuery returned no bytes-processed figure for the dry run." };
+      return {
+        error: "BigQuery returned no bytes-processed figure for the dry run.",
+        errorKind: "unknown"
+      };
     }
     const partitionedTables = await this.#partitionedTables(
       job.statistics?.query?.referencedTables ?? []
@@ -45797,6 +45815,22 @@ function indexByTarget(models, side) {
 // ../core/src/estimate.ts
 var PARTITION_JUMP_RATIO = 10;
 var PARTITION_JUMP_MIN_BYTES = 2 ** 30;
+var ERROR_KIND_TEXT = {
+  "permission-denied": "permission denied",
+  "api-disabled": "the BigQuery API is not enabled in the dry-run project",
+  "not-found": "a table or dataset it reads was not found",
+  "partition-filter-required": "a table it reads requires a partition filter and the query has none, so it would also fail when it runs",
+  "query-error": "BigQuery rejected the query",
+  unknown: "the dry run returned an error"
+};
+function dryRunFailed(side, result) {
+  return {
+    status: "unestimable",
+    reason: `Dry run at ${side} failed: ${ERROR_KIND_TEXT[result.errorKind]}. BigQuery's message is in the job log.`,
+    errorKind: result.errorKind,
+    detail: result.error
+  };
+}
 function partitionFilterCause(base, head) {
   if (base.bytes <= 0) return void 0;
   if (head.bytes < base.bytes * PARTITION_JUMP_RATIO) return void 0;
@@ -45834,11 +45868,7 @@ async function estimateChange(change, runner, config, newTargets = /* @__PURE__ 
     head?.incrementalQuery === void 0 ? void 0 : runner.estimate(head.query, head.location)
   ]);
   if ("error" in baseResult) {
-    return {
-      status: "unestimable",
-      ...common,
-      reason: `Dry run at base failed: ${baseResult.error}`
-    };
+    return { ...common, ...dryRunFailed("base", baseResult) };
   }
   if ("error" in headResult) {
     const upstream = head === void 0 ? void 0 : readsNewTarget(steadyStateSql(head), change.target, newTargets);
@@ -45847,14 +45877,12 @@ async function estimateChange(change, runner, config, newTargets = /* @__PURE__ 
         status: "unestimable",
         ...common,
         reason: `Reads \`${upstream}\`, which this pull request creates, so it can only be estimated once that table exists.`,
+        errorKind: headResult.errorKind,
+        detail: headResult.error,
         newUpstream: upstream
       };
     }
-    return {
-      status: "unestimable",
-      ...common,
-      reason: `Dry run at head failed: ${headResult.error}`
-    };
+    return { ...common, ...dryRunFailed("head", headResult) };
   }
   const runsPerDay = runsPerDayFor(model, config);
   const likelyCause = partitionFilterCause(baseResult, headResult);
@@ -46288,6 +46316,11 @@ function dryRunFailure(report) {
   if (first === void 0 || failed.length < tried.length) return void 0;
   return `No changed model could be estimated (${String(failed.length)} tried). Check the Google Cloud project and permissions. First error, for ${first.name}: ${first.reason}`;
 }
+function failureDetails(report) {
+  return report.estimates.flatMap(
+    (e2) => e2.status === "unestimable" && e2.detail !== void 0 ? [`${e2.name}: ${e2.detail}`] : []
+  );
+}
 
 // src/main.ts
 var MAX_CONCURRENT_DRY_RUNS = 4;
@@ -46323,6 +46356,10 @@ async function main() {
     runner: limitConcurrency(new BigQueryDryRunner({ projectId }), MAX_CONCURRENT_DRY_RUNS)
   });
   info(comment);
+  const details = failureDetails(report);
+  if (details.length > 0) {
+    info(["BigQuery's messages for the dry runs that failed:", ...details].join("\n"));
+  }
   await summary.addRaw(comment).write();
   setOutput("monthly-delta", report.totalMonthlyDelta.toFixed(2));
   setOutput("over-limit", String(report.overLimit));

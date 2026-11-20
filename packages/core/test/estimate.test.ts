@@ -119,11 +119,17 @@ describe("estimateChange", () => {
 
   it("reports a failed dry run plainly instead of guessing", async () => {
     const m = model({ name: "t" });
-    const runner = new FakeDryRunner([], { error: "Not found: Table proj:analytics.upstream" });
+    const runner = new FakeDryRunner([], {
+      error: "Not found: Table proj:analytics.upstream",
+      errorKind: "not-found",
+    });
     const e = await estimateChange({ kind: "added", target: m.target, head: m }, runner, config);
     expect(e).toMatchObject({
       status: "unestimable",
-      reason: "Dry run at head failed: Not found: Table proj:analytics.upstream",
+      reason:
+        "Dry run at head failed: a table or dataset it reads was not found. BigQuery's message is in the job log.",
+      errorKind: "not-found",
+      detail: "Not found: Table proj:analytics.upstream",
     });
   });
 });
@@ -228,6 +234,7 @@ describe("new upstream tables", () => {
   });
   const runner = new FakeDryRunner([[upstream.query, { bytes: 1024 }]], {
     error: "Not found: Table proj:analytics.new_source was not found in location US",
+    errorKind: "not-found",
   });
 
   it("reports a model reading a table the same PR adds plainly", async () => {
@@ -250,7 +257,7 @@ describe("new upstream tables", () => {
     });
   });
 
-  it("keeps the BigQuery error when the query reads no new table", async () => {
+  it("reports the failure kind when the query reads no new table", async () => {
     const e = await estimateChange(
       { kind: "added", target: reader.target, head: reader },
       runner,
@@ -260,7 +267,8 @@ describe("new upstream tables", () => {
     expect(e).toMatchObject({
       status: "unestimable",
       reason:
-        "Dry run at head failed: Not found: Table proj:analytics.new_source was not found in location US",
+        "Dry run at head failed: a table or dataset it reads was not found. BigQuery's message is in the job log.",
+      detail: "Not found: Table proj:analytics.new_source was not found in location US",
     });
     expect(e).not.toHaveProperty("newUpstream");
   });

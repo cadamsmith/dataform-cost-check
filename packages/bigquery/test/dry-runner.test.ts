@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BigQueryDryRunner } from "../src/index.ts";
+import { BigQueryDryRunner, classifyError } from "../src/index.ts";
 
 interface Call {
   readonly url: string;
@@ -66,13 +66,30 @@ describe("BigQueryDryRunner", () => {
   it("reports a query error as not estimable", async () => {
     const message = "Not found: Dataset test-project:raw was not found in location US";
     const { runner } = runnerReturning(404, { error: { code: 404, message } });
-    await expect(runner.estimate("SELECT 1", "US")).resolves.toEqual({ error: message });
+    await expect(runner.estimate("SELECT 1", "US")).resolves.toEqual({
+      error: message,
+      errorKind: "not-found",
+    });
   });
 
   it("reports missing table access as not estimable", async () => {
     const message = "Access Denied: Table test-project:raw.orders";
     const { runner } = runnerReturning(403, { error: { code: 403, message } });
-    await expect(runner.estimate("SELECT 1", "US")).resolves.toEqual({ error: message });
+    await expect(runner.estimate("SELECT 1", "US")).resolves.toEqual({
+      error: message,
+      errorKind: "permission-denied",
+    });
+  });
+
+  it("keeps BigQuery's message as detail and sorts it into a kind", async () => {
+    const message = "Syntax error: Unclosed string literal 'secret-customer-id' at [1:8]";
+    const { runner } = runnerReturning(400, {
+      error: { code: 400, message, errors: [{ reason: "invalidQuery", message }] },
+    });
+    await expect(runner.estimate("SELECT 1", "US")).resolves.toEqual({
+      error: message,
+      errorKind: "query-error",
+    });
   });
 
   it("throws on bad credentials, which would fail every model", async () => {
@@ -94,6 +111,38 @@ describe("BigQueryDryRunner", () => {
     const { runner } = runnerReturning(200, { statistics: {} });
     await expect(runner.estimate("SELECT 1", "US")).resolves.toEqual({
       error: "BigQuery returned no bytes-processed figure for the dry run.",
+      errorKind: "unknown",
+    });
+  });
+
+  describe("classifyError", () => {
+    it("names a disabled API", () => {
+      expect(
+        classifyError(403, {
+          message: "BigQuery API has not been used in project 1 before or it is disabled.",
+          errors: [{ reason: "accessNotConfigured" }],
+        }),
+      ).toBe("api-disabled");
+      expect(classifyError(403, { details: [{ reason: "SERVICE_DISABLED" }] })).toBe(
+        "api-disabled",
+      );
+    });
+
+    it("names a missing required partition filter", () => {
+      expect(
+        classifyError(400, {
+          message:
+            "Cannot query over table 'p.d.events' without a filter over column(s) 'day' that can be used for partition elimination",
+          errors: [{ reason: "invalidQuery" }],
+        }),
+      ).toBe("partition-filter-required");
+    });
+
+    it("falls back on the status", () => {
+      expect(classifyError(404, undefined)).toBe("not-found");
+      expect(classifyError(403, undefined)).toBe("permission-denied");
+      expect(classifyError(400, undefined)).toBe("query-error");
+      expect(classifyError(409, undefined)).toBe("unknown");
     });
   });
 

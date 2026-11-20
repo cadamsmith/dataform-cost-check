@@ -46004,10 +46004,7 @@ function renderComment(report, {
   const omitted = report.estimates.length - shown.length - listed;
   if (omitted > 0) {
     const models = omitted === 1 ? "1 more model" : `${String(omitted)} more models`;
-    body.push(
-      `\u2026and ${models}, left out to keep this comment within GitHub's size limit. ${fullReportAt}`,
-      ""
-    );
+    body.push(`\u2026and ${models}, left out to keep this comment short. ${fullReportAt}`, "");
   }
   return [...head, ...body, tail].join("\n") + "\n";
 }
@@ -46042,7 +46039,7 @@ function headline(report) {
     text = `This change adds an estimated **${formatUsd(total, { signed: true })} / month**.`;
   else if (total < 0) text = `This change saves an estimated **${formatUsd(-total)} / month**.`;
   else text = "This change does not move the monthly estimate.";
-  if (report.limitMonthly !== null) {
+  if (report.limitMonthly !== null && estimated.length > 0) {
     const limit = formatUsd(report.limitMonthly);
     text += report.overLimit ? ` :x: Over the ${limit} limit.` : ` Within the ${limit} limit.`;
   }
@@ -46395,8 +46392,8 @@ function dryRunFailure(report) {
   const first = failed[0];
   if (first === void 0 || failed.length < tried.length) return void 0;
   const setup = first.errorKind === void 0 || first.errorKind === "permission-denied" || first.errorKind === "api-disabled" || first.errorKind === "unknown";
-  const hint = setup ? "Check the Google Cloud project and permissions." : "BigQuery's message is in the job log.";
-  return `No changed model could be estimated (${String(failed.length)} tried). ${hint} First error, for ${first.name}: ${first.reason}`;
+  const hint = setup ? "Check the Google Cloud project and permissions. " : "";
+  return `No changed model could be estimated (${String(failed.length)} tried). ${hint}First error, for ${first.name}: ${first.reason}`;
 }
 function dropsRequiredFilter(e2) {
   return e2.status === "unestimable" && e2.reason.startsWith(PARTITION_FILTER_REQUIRED_REASON);

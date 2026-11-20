@@ -14,8 +14,10 @@ function causeText(cause: LikelyCause): string {
 }
 
 /**
- * GitHub rejects a comment longer than 65,536 characters. The comment stops adding rows
- * well below that, so the headline and verdict always survive.
+ * Longest comment the action posts. Editing shared includes can change every model, and a
+ * wall of rows buries the verdict, so the comment stops adding rows here; the headline
+ * and verdict always survive. (GitHub's documented 65,536-character limit was not
+ * enforced when tested on 2026-11-20: a 162,087-character comment was accepted.)
  */
 export const COMMENT_MAX_LENGTH = 60_000;
 
@@ -108,10 +110,7 @@ export function renderComment(
   const omitted = report.estimates.length - shown.length - listed;
   if (omitted > 0) {
     const models = omitted === 1 ? "1 more model" : `${String(omitted)} more models`;
-    body.push(
-      `…and ${models}, left out to keep this comment within GitHub's size limit. ${fullReportAt}`,
-      "",
-    );
+    body.push(`…and ${models}, left out to keep this comment short. ${fullReportAt}`, "");
   }
 
   return [...head, ...body, tail].join("\n") + "\n";
@@ -161,7 +160,8 @@ function headline(report: Report): string {
   else if (total < 0) text = `This change saves an estimated **${formatUsd(-total)} / month**.`;
   else text = "This change does not move the monthly estimate.";
 
-  if (report.limitMonthly !== null) {
+  // With nothing estimated, "within the limit" would read as a pass while the check fails.
+  if (report.limitMonthly !== null && estimated.length > 0) {
     const limit = formatUsd(report.limitMonthly);
     text += report.overLimit ? ` :x: Over the ${limit} limit.` : ` Within the ${limit} limit.`;
   }

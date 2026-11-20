@@ -92,7 +92,7 @@ describe("dryRunFailure", () => {
     const rejected = { ...failed, errorKind: "query-error" } as const;
     const message = dryRunFailure(report([rejected]));
     expect(message).not.toContain("Check the Google Cloud project");
-    expect(message).toContain("BigQuery's message is in the job log.");
+    expect(message).toContain("First error, for bad:");
   });
 
   it("passes when at least one dry run succeeded", () => {

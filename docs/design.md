@@ -118,13 +118,15 @@ reports "not estimated" with a reason.
   (`bigquery.classifyError`). The comment and the "every dry run fails" message name the
   kind; BigQuery's message goes to the job log only (`action.failureDetails`), as plain
   log lines rather than warnings, since annotations show on the pull request. Chosen in #24.
-- **Comment size.** GitHub rejects a comment over 65,536 characters, and editing
-  `includes/` or `workflow_settings.yaml` can change every model at once. The comment
+- **Comment size.** Editing `includes/` or `workflow_settings.yaml` can change every model
+  at once, and a wall of rows buries the verdict. #25 assumed GitHub rejects comments over
+  65,536 characters, but on 2026-11-20 both creating and updating a comment accepted
+  162,087 characters, so the cap is kept for readability, not to avoid a rejection. The comment
   always starts with the headline and verdict and ends with the footer. Rows are sorted
   by the size of their monthly change (byte change breaks ties), and rows, notes and "not
   estimated" entries stop before 60,000 characters (`core.COMMENT_MAX_LENGTH`), ending with
   a count of the models left out. The job summary gets the same report capped at 900,000
-  (the step summary limit is 1 MiB), and the job log gets it uncapped. Chosen in #25.
+  (GitHub documents a 1 MiB step summary limit; not verified), and the job log gets it uncapped. Chosen in #25.
 - **Views.** Creating a view costs nothing; the cost lands on whatever reads it. Views are
   skipped with that reason.
 - **Assertions, operations, pre/post operations.** Decide per type: estimate, skip, or

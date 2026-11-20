@@ -15,15 +15,15 @@ export interface RunDeps {
 
 export interface RunResult {
   readonly report: Report;
-  /** The PR comment, capped below GitHub's comment size limit. */
+  /** The PR comment, capped at `COMMENT_MAX_LENGTH`. */
   readonly comment: string;
-  /** The job summary, capped below GitHub's step summary limit. */
+  /** The job summary, capped at `SUMMARY_MAX_LENGTH`. */
   readonly summary: string;
   /** The whole report, uncapped, for the job log. */
   readonly full: string;
 }
 
-/** GitHub's step summary limit is 1 MiB; stay well below it. */
+/** GitHub documents a 1 MiB step summary limit (not verified here); stay well below it. */
 export const SUMMARY_MAX_LENGTH = 900_000;
 
 /** The whole check, minus I/O: diff, estimate, render. */
@@ -65,11 +65,10 @@ export function dryRunFailure(report: Report): string | undefined {
     first.errorKind === "permission-denied" ||
     first.errorKind === "api-disabled" ||
     first.errorKind === "unknown";
-  const hint = setup
-    ? "Check the Google Cloud project and permissions."
-    : "BigQuery's message is in the job log.";
+  // The reason already points to the job log, so a rejected query needs no extra hint.
+  const hint = setup ? "Check the Google Cloud project and permissions. " : "";
   return (
-    `No changed model could be estimated (${String(failed.length)} tried). ${hint} ` +
+    `No changed model could be estimated (${String(failed.length)} tried). ${hint}` +
     `First error, for ${first.name}: ${first.reason}`
   );
 }

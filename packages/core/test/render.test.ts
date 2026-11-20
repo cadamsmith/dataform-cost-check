@@ -108,6 +108,12 @@ describe("renderComment", () => {
     expect(renderComment(report({}))).toMatchSnapshot();
   });
 
+  it("does not call an all-failed run within the limit", () => {
+    const body = renderComment(report({ estimates: [broken], limitMonthly: 100 }));
+    expect(body).toContain("None of the changed models were estimated.");
+    expect(body).not.toContain("Within the");
+  });
+
   it("renders when nothing could be estimated", () => {
     expect(renderComment(report({ estimates: [view, broken] }))).toMatchSnapshot();
   });
@@ -141,13 +147,13 @@ describe("renderComment size cap", () => {
     overLimit: true,
   });
 
-  it("stays under GitHub's limit and keeps the verdict, largest changes first", () => {
+  it("stays under the length cap and keeps the verdict, largest changes first", () => {
     const body = renderComment(big);
     expect(body.length).toBeLessThanOrEqual(COMMENT_MAX_LENGTH);
     expect(body).toContain(":x: Over the $100.00 limit.");
     expect(body).toContain("slot-based (Editions) pricing");
     expect(body).toMatch(
-      /…and \d+ more models, left out to keep this comment within GitHub's size limit\. The job summary has the full report\./,
+      /…and \d+ more models, left out to keep this comment short\. The job summary has the full report\./,
     );
     expect(body.indexOf("model_with_a_fairly_long_name_1999`")).toBeLessThan(
       body.indexOf("model_with_a_fairly_long_name_1998`"),

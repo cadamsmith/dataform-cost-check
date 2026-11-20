@@ -165,7 +165,8 @@ runtime), Node.js and npm for the Dataform CLI, and `git`.
 ## Limits to know
 
 Figures are **estimates and upper bounds**: they come from dry runs, ignore caching, and do
-not deduct BigQuery's monthly free tier. They assume on-demand pricing. If your project uses
+not deduct BigQuery's monthly free tier. (Billing rounds each query up to the next MiB, with
+a 10 MiB minimum, which can add a fraction of a cent.) They assume on-demand pricing. If your project uses
 slot-based (Editions) pricing, bytes scanned do not map to dollars. The action never predicts
 run time. Runs per day come from your config file, not from your Dataform schedules. Tested
 with Dataform 3.x (CLI and core 3.0.61) and with Dataform 2.x projects (`dataform.json`,

@@ -22,6 +22,6 @@ Pre-alpha. See `README.md`, `CONTRIBUTING.md` and `docs/design.md`.
 
 - `pnpm check` (lint, format, typecheck, tests) and `pnpm build` before finishing. Commit
   `dist/` changes; CI fails if it is stale.
-- `packages/core` stays free of I/O. Only `packages/bigquery` touches the network.
+- `packages/core` stays free of I/O. Only `packages/bigquery` talks to Google Cloud, and `packages/action` only calls the GitHub API to post the comment. Nothing else touches the network: no downloads at runtime (users install the Dataform CLI and `node_modules`).
 - After an intended change to the PR comment, run `pnpm vitest run -u` and review the
   snapshot diff.

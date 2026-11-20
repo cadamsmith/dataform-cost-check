@@ -1,7 +1,7 @@
 name: Nightly
 
-# Catches drift we do not control: new Dataform CLI releases (whose output the adapter
-# parses) and BigQuery's live API. Dry runs are free.
+# Catches drift we do not control: new Dataform CLI releases, whose output the adapter
+# parses. (A live run against BigQuery is planned separately: #68.)
 on:
   schedule:
     - cron: "23 4 * * *"
@@ -80,55 +80,9 @@ jobs:
       - name: Compile and parse a dataform.json project
         run: DATAFORM_V2_CLI="$RUNNER_TEMP/cli2/node_modules/.bin/dataform" node_modules/.bin/vitest run packages/dataform/test/compile.test.ts
 
-  live:
-    name: Live run against BigQuery
-    # Needs keyless sign-in for this repository (repository variables GCP_PROJECT,
-    # GCP_WIF_PROVIDER, GCP_SERVICE_ACCOUNT). Skipped until they are set.
-    if: ${{ vars.GCP_WIF_PROVIDER != '' }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
-        with:
-          persist-credentials: false
-
-      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
-        with:
-          node-version-file: .nvmrc
-          package-manager-cache: false
-
-      - name: Install and build
-        run: |
-          corepack enable
-          pnpm install --frozen-lockfile
-          pnpm build
-
-      - name: Install the Dataform CLI
-        run: npm install -g @dataform/cli@3.0.61 # zizmor: ignore[adhoc-packages]
-
-      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
-        with:
-          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
-          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
-
-      - name: Run the partition-filter demo with a $1 limit
-        env:
-          GCP_PROJECT: ${{ vars.GCP_PROJECT }}
-        run: |
-          git config --global user.name nightly
-          git config --global user.email nightly@example.com
-          examples/trends-demo/run.sh --project "$GCP_PROJECT" --limit 1 | tee "$RUNNER_TEMP/out.txt"
-          # The demo drops a partition filter on a public table: the estimate must go over
-          # the limit, name the cause, and fail the check.
-          grep -q 'Over the \$1.00 limit' "$RUNNER_TEMP/out.txt"
-          grep -q 'likely cause: a filter on the partitioned table' "$RUNNER_TEMP/out.txt"
-          grep -q 'Check exit code: 1' "$RUNNER_TEMP/out.txt"
-
   report:
     name: Open an issue when the nightly fails
-    needs: [cli-canary, cli-v2, live]
+    needs: [cli-canary, cli-v2]
     if: ${{ failure() && github.event_name == 'schedule' }}
     runs-on: ubuntu-latest
     permissions:
@@ -142,5 +96,5 @@ jobs:
           if [ -n "$existing" ]; then
             gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "Failed again: $RUN_URL"
           else
-            gh issue create --repo "$GITHUB_REPOSITORY" --label nightly --title "Nightly run failed" --body "The nightly CLI canary or live run failed: $RUN_URL"
+            gh issue create --repo "$GITHUB_REPOSITORY" --label nightly --title "Nightly run failed" --body "The nightly CLI canary failed: $RUN_URL"
           fi

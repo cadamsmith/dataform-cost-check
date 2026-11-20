@@ -30,6 +30,8 @@ interface CompiledAction {
   };
   readonly query?: string;
   readonly incrementalQuery?: string;
+  readonly preOps?: readonly string[];
+  readonly incrementalPreOps?: readonly string[];
   /** Operations only: one entry per statement. */
   readonly queries?: readonly string[];
   readonly tags?: readonly string[];
@@ -152,6 +154,9 @@ function toModel(
     type,
     query,
     ...(action.incrementalQuery !== undefined && { incrementalQuery: action.incrementalQuery }),
+    ...(action.preOps !== undefined && action.preOps.length > 0 && { preOps: action.preOps }),
+    ...(action.incrementalPreOps !== undefined &&
+      action.incrementalPreOps.length > 0 && { incrementalPreOps: action.incrementalPreOps }),
     tags: action.tags ?? [],
     ...(location !== undefined && { location }),
   };

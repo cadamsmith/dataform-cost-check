@@ -10,6 +10,7 @@ import {
   estimateChanges,
   limitCannotApply,
   partitionFilterCause,
+  preOpsVariableIn,
   readsNewTarget,
 } from "../src/index.ts";
 import type { Config, Estimate } from "../src/index.ts";
@@ -342,5 +343,46 @@ describe("assertions", () => {
       config,
     );
     expect(e).toMatchObject({ status: "estimated", type: "assertion", headBytes: BYTES_PER_TIB });
+  });
+});
+
+describe("pre_operations variables", () => {
+  const preOps = ["DECLARE checkpoint DATE DEFAULT (SELECT MAX(day) FROM `p.d.t`);"];
+
+  it("finds a declared variable the query uses, as a whole word", () => {
+    expect(preOpsVariableIn("SELECT * FROM t WHERE day > checkpoint", preOps)).toBe("checkpoint");
+    expect(preOpsVariableIn("SELECT checkpoints FROM t", preOps)).toBeUndefined();
+    expect(preOpsVariableIn("SELECT a FROM t WHERE b > y", ["declare x, y INT64;"])).toBe("y");
+    expect(preOpsVariableIn("SELECT 1", [])).toBeUndefined();
+  });
+
+  it("reports the model as not estimated without dry-running it", async () => {
+    const m = model({
+      name: "inc",
+      type: "incremental",
+      query: "SELECT * FROM src WHERE day > checkpoint",
+      incrementalQuery: "SELECT * FROM src WHERE day > checkpoint",
+      preOps,
+      incrementalPreOps: preOps,
+    });
+    const runner = new FakeDryRunner([]);
+    const e = await estimateChange({ kind: "added", target: m.target, head: m }, runner, config);
+    expect(e).toMatchObject({
+      status: "unestimable",
+      preOpsVariable: "checkpoint",
+      reason:
+        "Filters on `checkpoint`, a variable set in pre_operations, which a dry run cannot size.",
+    });
+    expect(runner.calls).toEqual([]);
+  });
+
+  it("still estimates a model whose pre-operations the query does not use", async () => {
+    const m = model({ name: "t", query: "q", preOps: ["DECLARE unused INT64;"] });
+    const e = await estimateChange(
+      { kind: "added", target: m.target, head: m },
+      new FakeDryRunner([["q", { bytes: 10 }]]),
+      config,
+    );
+    expect(e).toMatchObject({ status: "estimated", headBytes: 10 });
   });
 });

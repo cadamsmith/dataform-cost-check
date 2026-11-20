@@ -88,3 +88,36 @@ describe("parseCompileOutput", () => {
     expect(() => parseCompileOutput(null)).toThrow(/not a JSON object/);
   });
 });
+
+/**
+ * Real `dataform compile --json` output (CLI and core 3.0.61) from a project shaped like
+ * a team's: actions defined in JavaScript (`publish` in a loop, `assert`, `declare`), an
+ * `includes/` helper, a `package.json`, and an incremental with a pre-operations checkpoint.
+ */
+const jsProject: unknown = JSON.parse(
+  readFileSync(new URL("fixtures/js-compile.json", import.meta.url), "utf8"),
+);
+
+describe("parseCompileOutput on JavaScript-defined actions", () => {
+  it("maps tables from a publish() loop, a JS assertion and an SQLX incremental", () => {
+    const models = parseCompileOutput(jsProject);
+    expect(models.map((m) => [m.name, m.type]).sort()).toEqual([
+      ["terms_daily", "incremental"],
+      ["top_rising_terms_yesterday", "table"],
+      ["top_terms_have_rank", "assertion"],
+      ["top_terms_yesterday", "table"],
+    ]);
+  });
+
+  it("expands includes/ helpers into the compiled SQL", () => {
+    const table = parseCompileOutput(jsProject).find((m) => m.name === "top_terms_yesterday");
+    expect(table?.query).toContain("DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY)");
+    expect(table?.tags).toEqual(["hourly"]);
+  });
+
+  it("keeps both kinds of pre-operations on an incremental model", () => {
+    const inc = parseCompileOutput(jsProject).find((m) => m.name === "terms_daily");
+    expect(inc?.preOps?.[0]).toContain("DECLARE checkpoint");
+    expect(inc?.incrementalPreOps?.[0]).toContain("SELECT MAX(refresh_date)");
+  });
+});

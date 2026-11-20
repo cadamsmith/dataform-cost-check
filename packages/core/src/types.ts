@@ -17,6 +17,10 @@ export interface Model {
   readonly query: string;
   /** Incremental models only: the compiled incremental (steady-state) query. */
   readonly incrementalQuery?: string;
+  /** Statements run before `query` (Dataform `pre_operations`), e.g. `DECLARE` a checkpoint. */
+  readonly preOps?: readonly string[];
+  /** Incremental models only: statements run before `incrementalQuery`. */
+  readonly incrementalPreOps?: readonly string[];
   readonly tags: readonly string[];
   /**
    * BigQuery location the query runs in, e.g. `US` or `europe-west2`. Absent when the
@@ -143,6 +147,11 @@ export type Estimate =
        * request creates, which does not exist yet: that table's target.
        */
       readonly newUpstream?: string;
+      /**
+       * Set when the query filters on a variable declared in `pre_operations`: its name.
+       * A dry run cannot size such a query, so it is not tried.
+       */
+      readonly preOpsVariable?: string;
     };
 
 /** User configuration, normally read from `dataform-cost-check.yml`. */

@@ -45801,7 +45801,10 @@ function diffModels(base, head) {
   return changes.sort((x2, y) => x2.target.localeCompare(y.target));
 }
 function sqlDiffers(a, b) {
-  return a.type !== b.type || a.query !== b.query || a.incrementalQuery !== b.incrementalQuery;
+  return a.type !== b.type || a.query !== b.query || a.incrementalQuery !== b.incrementalQuery || !sameStatements(a.preOps, b.preOps) || !sameStatements(a.incrementalPreOps, b.incrementalPreOps);
+}
+function sameStatements(a = [], b = []) {
+  return a.length === b.length && a.every((s2, i2) => s2 === b[i2]);
 }
 function indexByTarget(models, side) {
   const map = /* @__PURE__ */ new Map();
@@ -45847,6 +45850,17 @@ var SKIP_REASONS = {
 function steadyStateSql(model) {
   return model.incrementalQuery ?? model.query;
 }
+function steadyStatePreOps(model) {
+  return (model.incrementalQuery !== void 0 ? model.incrementalPreOps : model.preOps) ?? [];
+}
+function preOpsVariableIn(sql, preOps) {
+  const declared = preOps.flatMap(
+    (statement) => [...statement.matchAll(/\bDECLARE\s+([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*)/gi)].flatMap(
+      (m2) => (m2[1] ?? "").split(",").map((name) => name.trim())
+    )
+  );
+  return declared.find((name) => new RegExp(`\\b${name}\\b`, "i").test(sql));
+}
 function estimable(model) {
   return SKIP_REASONS[model.type] === void 0 ? model : void 0;
 }
@@ -45862,10 +45876,22 @@ async function estimateChange(change, runner, config, newTargets = /* @__PURE__ 
   if (base === void 0 && head === void 0) {
     return { status: "skipped", ...common, reason: SKIP_REASONS[model.type] ?? "Not estimated." };
   }
+  for (const side of [base, head]) {
+    if (side === void 0) continue;
+    const variable = preOpsVariableIn(steadyStateSql(side), steadyStatePreOps(side));
+    if (variable !== void 0) {
+      return {
+        status: "unestimable",
+        ...common,
+        reason: `Filters on \`${variable}\`, a variable set in pre_operations, which a dry run cannot size.`,
+        preOpsVariable: variable
+      };
+    }
+  }
   const [baseResult, headResult, fullRefreshResult] = await Promise.all([
     base === void 0 ? { bytes: 0 } : runner.estimate(steadyStateSql(base), base.location),
     head === void 0 ? { bytes: 0 } : runner.estimate(steadyStateSql(head), head.location),
-    head?.incrementalQuery === void 0 ? void 0 : runner.estimate(head.query, head.location)
+    head?.incrementalQuery === void 0 || preOpsVariableIn(head.query, head.preOps ?? []) !== void 0 ? void 0 : runner.estimate(head.query, head.location)
   ]);
   if ("error" in baseResult) {
     return { ...common, ...dryRunFailed("base", baseResult) };
@@ -46191,6 +46217,8 @@ function toModel(action, type, location, query) {
     type,
     query,
     ...action.incrementalQuery !== void 0 && { incrementalQuery: action.incrementalQuery },
+    ...action.preOps !== void 0 && action.preOps.length > 0 && { preOps: action.preOps },
+    ...action.incrementalPreOps !== void 0 && action.incrementalPreOps.length > 0 && { incrementalPreOps: action.incrementalPreOps },
     tags: action.tags ?? [],
     ...location !== void 0 && { location }
   };
@@ -46408,7 +46436,7 @@ async function runCheck(deps) {
 }
 function dryRunFailure(report) {
   const tried = report.estimates.filter(
-    (e2) => e2.status !== "skipped" && !(e2.status === "unestimable" && (e2.newUpstream !== void 0 || dropsRequiredFilter(e2)))
+    (e2) => e2.status !== "skipped" && !(e2.status === "unestimable" && (e2.newUpstream !== void 0 || e2.preOpsVariable !== void 0 || dropsRequiredFilter(e2)))
   );
   const failed = tried.filter((e2) => e2.status === "unestimable");
   const first = failed[0];

@@ -21,6 +21,11 @@ export interface Model {
   readonly preOps?: readonly string[];
   /** Incremental models only: statements run before `incrementalQuery`. */
   readonly incrementalPreOps?: readonly string[];
+  /**
+   * Incremental models with a `uniqueKey`: each run is a MERGE into the existing table.
+   * `partitionFiltered` is true when `updatePartitionFilter` limits what it reads.
+   */
+  readonly merge?: { readonly partitionFiltered: boolean };
   readonly tags: readonly string[];
   /**
    * BigQuery location the query runs in, e.g. `US` or `europe-west2`. Absent when the
@@ -117,6 +122,11 @@ export type Estimate =
        * run failed.
        */
       readonly fullRefreshBytes?: number;
+      /**
+       * Incremental models with a `uniqueKey`: the run is a MERGE that also reads the
+       * existing table, which the dry run of the SELECT does not count.
+       */
+      readonly merge?: { readonly partitionFiltered: boolean };
     }
   | {
       /** Deliberately not estimated, e.g. views or custom operations. */

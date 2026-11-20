@@ -411,3 +411,24 @@ describe("new incremental models", () => {
     });
   });
 });
+
+describe("unique-key incremental models", () => {
+  it("carries the MERGE flag onto the estimate", async () => {
+    const m = model({
+      name: "m",
+      type: "incremental",
+      query: "q",
+      incrementalQuery: "iq",
+      merge: { partitionFiltered: false },
+    });
+    const e = await estimateChange(
+      { kind: "added", target: m.target, head: m },
+      new FakeDryRunner([
+        ["iq", { bytes: 1 }],
+        ["q", { bytes: 2 }],
+      ]),
+      config,
+    );
+    expect(e).toMatchObject({ status: "estimated", merge: { partitionFiltered: false } });
+  });
+});

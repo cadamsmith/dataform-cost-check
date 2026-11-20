@@ -121,3 +121,25 @@ describe("parseCompileOutput on JavaScript-defined actions", () => {
     expect(inc?.incrementalPreOps?.[0]).toContain("SELECT MAX(refresh_date)");
   });
 });
+
+describe("parseCompileOutput on incremental models with a unique key", () => {
+  const withKey = (bigquery?: object) =>
+    sampleWith((o) => {
+      const t = (o.tables as Record<string, unknown>[]).find((x) => x.type === "incremental");
+      if (t === undefined) throw new Error("sample has no incremental");
+      t.uniqueKey = ["order_id"];
+      if (bigquery !== undefined) t.bigquery = bigquery;
+    });
+
+  it("marks the model as a MERGE, and whether an update filter limits it", () => {
+    const inc = (out: unknown) => parseCompileOutput(out).find((m) => m.type === "incremental");
+    expect(inc(withKey())?.merge).toEqual({ partitionFiltered: false });
+    expect(inc(withKey({ updatePartitionFilter: "day > '2026-01-01'" }))?.merge).toEqual({
+      partitionFiltered: true,
+    });
+    const noKey = sampleWith((o) => {
+      for (const t of o.tables as Record<string, unknown>[]) delete t.uniqueKey;
+    });
+    expect(inc(noKey)?.merge).toBeUndefined();
+  });
+});

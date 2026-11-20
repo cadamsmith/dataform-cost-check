@@ -45906,6 +45906,9 @@ function row(e2) {
 function notesFor(e2) {
   return [
     ...e2.likelyCause === void 0 ? [] : [`- \`${e2.name}\`: likely cause: ${causeText(e2.likelyCause)}.`],
+    ...e2.merge === void 0 ? [] : [
+      e2.merge.partitionFiltered ? `- \`${e2.name}\`: has a unique key, so each run is a MERGE that also reads the table's partitions matching its update filter. Those bytes are not included, so this model's figure is a lower bound.` : `- \`${e2.name}\`: has a unique key, so each run is a MERGE that also reads the whole existing table. Those bytes are not included, so this model's figure is a lower bound. An \`updatePartitionFilter\` limits that read.`
+    ],
     ...e2.fullRefreshBytes === void 0 ? [] : [
       `- \`${e2.name}\`: incremental, estimated from its incremental query. A full refresh would scan up to ${formatBytes(e2.fullRefreshBytes)}, not included in the monthly estimate.`
     ]
@@ -46098,6 +46101,7 @@ async function estimateChange(change, runner, config, newTargets = /* @__PURE__ 
     pricePerTib,
     monthlyDelta: monthlyDelta(baseResult.bytes, headResult.bytes, pricePerTib, runsPerDay),
     ...likelyCause !== void 0 && { likelyCause },
+    ...head?.merge !== void 0 && { merge: head.merge },
     ...fullRefreshResult !== void 0 && "bytes" in fullRefreshResult && { fullRefreshBytes: fullRefreshResult.bytes }
   };
 }
@@ -46258,6 +46262,9 @@ function toModel(action, type, location, query) {
     ...action.preOps !== void 0 && action.preOps.length > 0 && { preOps: action.preOps },
     ...action.incrementalPreOps !== void 0 && action.incrementalPreOps.length > 0 && { incrementalPreOps: action.incrementalPreOps },
     tags: action.tags ?? [],
+    ...type === "incremental" && (action.uniqueKey?.length ?? 0) > 0 && {
+      merge: { partitionFiltered: Boolean(action.bigquery?.updatePartitionFilter) }
+    },
     ...location !== void 0 && { location }
   };
 }

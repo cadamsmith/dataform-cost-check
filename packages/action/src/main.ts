@@ -52,7 +52,7 @@ async function main(): Promise<void> {
     );
   }
   const baseRef = await resolveBaseRef(core.getInput("base-ref"), process.env.GITHUB_EVENT_PATH);
-  core.info(`Dataform Cost Check 0.2.0 (alpha). Base: ${baseRef}. Dry runs in: ${projectId}.`);
+  core.info(`Dataform Cost Check 0.3.0 (alpha). Base: ${baseRef}. Dry runs in: ${projectId}.`);
 
   const config = existsSync(configPath)
     ? parseConfig(readFileSync(configPath, "utf8"))

@@ -240,6 +240,9 @@ describe("refresh history", () => {
         history: {
           status: "ok",
           days: 7,
+          project: "proj",
+          jobsRead: 120,
+          complete: true,
           runs: {
             [ordersDaily.target]: {
               endedAt: "2026-11-20T19:58:12.000Z",
@@ -264,9 +267,37 @@ describe("refresh history", () => {
     );
     expect(off).toContain("Refresh history is turned on, but no permission.");
     const none = renderComment(
-      report({ estimates: [customers], history: { status: "ok", days: 7, runs: {} } }),
+      report({
+        estimates: [customers],
+        history: {
+          status: "ok",
+          days: 7,
+          project: "proj",
+          jobsRead: 120,
+          complete: true,
+          runs: {},
+        },
+      }),
     );
-    expect(none).toContain("No run of the changed models in the last 7 days.");
+    expect(none).toContain(
+      "No run of the changed models found in the last 7 days of `proj`'s job records.",
+    );
+    const capped = renderComment(
+      report({
+        estimates: [customers],
+        history: {
+          status: "ok",
+          days: 7,
+          project: "proj",
+          jobsRead: 5000,
+          complete: false,
+          runs: {},
+        },
+      }),
+    );
+    expect(capped).toContain(
+      "No run of the changed models found in the most recent 5,000 job records of `proj` (a busy project: older runs were not searched).",
+    );
   });
 
   it("adds nothing when history is off", () => {

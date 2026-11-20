@@ -55,7 +55,14 @@ describe("runCheck history", () => {
     ]),
     readHistory: (targets: readonly string[]) => {
       calls.push([...targets]);
-      return Promise.resolve({ status: "ok" as const, days: 7, runs: {} });
+      return Promise.resolve({
+        status: "ok" as const,
+        days: 7,
+        project: "proj",
+        jobsRead: 0,
+        complete: true,
+        runs: {},
+      });
     },
   });
 
@@ -65,7 +72,7 @@ describe("runCheck history", () => {
     expect(calls).toEqual([]);
     const on = await runCheck(deps(true, calls));
     expect(calls).toEqual([[base.target]]);
-    expect(on.comment).toContain("No run of the changed models in the last 7 days.");
+    expect(on.comment).toContain("No run of the changed models found in the last 7 days");
   });
 });
 

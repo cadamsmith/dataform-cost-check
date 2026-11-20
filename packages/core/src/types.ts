@@ -215,6 +215,15 @@ export type RefreshHistory =
       readonly status: "ok";
       /** How many days back the job records were read. */
       readonly days: number;
+      /** The project whose job records were read. */
+      readonly project: string;
+      /** How many job records were read. */
+      readonly jobsRead: number;
+      /**
+       * False when the page cap stopped the search before it covered `days` (a busy
+       * project): a model not found may still have run in that window.
+       */
+      readonly complete: boolean;
       /** By target, `project.dataset.table`. */
       readonly runs: Readonly<Record<string, RefreshRun>>;
     }

@@ -161,15 +161,22 @@ function historySection(report: Report): string[] {
           `| \`${e.name}\` | ${run.endedAt.slice(0, 16).replace("T", " ")} UTC | ${formatDuration(run.durationMs)} | ${formatSlotHours(run.slotMs)} |`,
         ];
   });
+  const searched = history.complete
+    ? `the last ${String(history.days)} days of \`${history.project}\`'s job records`
+    : `the most recent ${history.jobsRead.toLocaleString("en-US")} job records of \`${history.project}\` (a busy project: older runs were not searched)`;
   if (rows.length === 0) {
-    return [
-      title,
-      "",
-      `No run of the changed models in the last ${String(history.days)} days.`,
-      "",
-    ];
+    return [title, "", `No run of the changed models found in ${searched}.`, ""];
   }
-  return [title, "", "| Model | Last run | Took | Slot-hours |", "|---|---|--:|--:|", ...rows, ""];
+  return [
+    title,
+    "",
+    "| Model | Last run | Took | Slot-hours |",
+    "|---|---|--:|--:|",
+    ...rows,
+    "",
+    `From ${searched}. Models not listed had no run there.`,
+    "",
+  ];
 }
 
 function formatDuration(ms: number): string {

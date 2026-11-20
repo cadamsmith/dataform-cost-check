@@ -83,6 +83,8 @@ export async function readRefreshHistory(
   const runs: Record<string, RefreshRun> = {};
   const since = Date.now() - days * 24 * 60 * 60 * 1000;
   let pageToken: string | undefined;
+  let jobsRead = 0;
+  let complete = false;
 
   for (let page = 0; page < (options.maxPages ?? 5) && wanted.size > 0; page++) {
     const params = new URLSearchParams({
@@ -108,6 +110,7 @@ export async function readRefreshHistory(
       };
     }
     // Newest first: the first job found for a table is its last run.
+    jobsRead += body.jobs?.length ?? 0;
     for (const job of body.jobs ?? []) {
       if (job.status?.errorResult !== undefined) continue;
       const target = jobTarget(job, wanted);
@@ -123,7 +126,12 @@ export async function readRefreshHistory(
       wanted.delete(target);
     }
     pageToken = body.nextPageToken;
-    if (pageToken === undefined) break;
+    if (pageToken === undefined) {
+      complete = true;
+      break;
+    }
   }
-  return { status: "ok", days, runs };
+  // Every table found also means nothing was missed.
+  if (wanted.size === 0) complete = true;
+  return { status: "ok", days, project: options.projectId, jobsRead, complete, runs };
 }

@@ -63,7 +63,8 @@ export function classifyError(status: number, error: ApiError | undefined): DryR
   return "unknown";
 }
 
-function applicationDefaultToken(): () => Promise<string> {
+/** Access tokens from Application Default Credentials (what google-github-actions/auth sets up). */
+export function applicationDefaultToken(): () => Promise<string> {
   const auth = new GoogleAuth({ scopes: [BIGQUERY_SCOPE] });
   return async () => {
     const token = await auth.getAccessToken();
@@ -184,3 +185,5 @@ export class BigQueryDryRunner implements DryRunner {
     }
   }
 }
+export { jobTarget, readRefreshHistory } from "./history.ts";
+export type { JobHistoryOptions } from "./history.ts";

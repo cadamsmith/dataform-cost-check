@@ -52,3 +52,11 @@ describe("parseConfig", () => {
     expect(() => parseConfig(text)).toThrow(message);
   });
 });
+
+describe("history", () => {
+  it("is off unless turned on, and must be a boolean", () => {
+    expect(parseConfig("price_per_tib: 6.25").history).toBeUndefined();
+    expect(parseConfig("history: true").history).toBe(true);
+    expect(() => parseConfig("history: yes please")).toThrow(/history must be true or false/);
+  });
+});

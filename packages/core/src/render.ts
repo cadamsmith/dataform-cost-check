@@ -118,6 +118,9 @@ export function renderComment(
     if (notes.length > 0 && fits([""])) body.push(...notes, "");
   }
 
+  const historyLines = historySection(report);
+  if (historyLines.length > 0 && fits(historyLines)) body.push(...historyLines);
+
   let listed = 0;
   if (notEstimated.length > 0 && fits(["**Not estimated**", "", ""])) {
     const items: string[] = [];
@@ -137,6 +140,50 @@ export function renderComment(
   }
 
   return [...head, ...body, tail].join("\n") + "\n";
+}
+
+/**
+ * Last runs of the changed models, from job records. Labelled as history: it says what a
+ * run took, never what the next one will.
+ */
+function historySection(report: Report): string[] {
+  const history = report.history;
+  if (history === undefined) return [];
+  const title = "**Last refresh** (history from BigQuery job records, not a forecast)";
+  if (history.status === "unavailable") {
+    return [title, "", `Refresh history is turned on, but ${history.reason}.`, ""];
+  }
+  const rows = report.estimates.flatMap((e) => {
+    const run = history.runs[e.target];
+    return run === undefined
+      ? []
+      : [
+          `| \`${e.name}\` | ${run.endedAt.slice(0, 16).replace("T", " ")} UTC | ${formatDuration(run.durationMs)} | ${formatSlotHours(run.slotMs)} |`,
+        ];
+  });
+  if (rows.length === 0) {
+    return [
+      title,
+      "",
+      `No run of the changed models in the last ${String(history.days)} days.`,
+      "",
+    ];
+  }
+  return [title, "", "| Model | Last run | Took | Slot-hours |", "|---|---|--:|--:|", ...rows, ""];
+}
+
+function formatDuration(ms: number): string {
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)} s`;
+  if (ms < 3_600_000) return `${(ms / 60_000).toFixed(1)} min`;
+  return `${(ms / 3_600_000).toFixed(1)} h`;
+}
+
+/** Slot time in hours, which is what slot-based (Editions) pricing charges for. */
+function formatSlotHours(slotMs: number): string {
+  const hours = slotMs / 3_600_000;
+  if (hours === 0) return "0";
+  if (hours < 0.001) return "<0.001";
+  return hours < 10 ? hours.toFixed(3) : hours.toFixed(1);
 }
 
 /** Largest change in the estimate first; byte change breaks ties (e.g. models at 0 per TiB). */

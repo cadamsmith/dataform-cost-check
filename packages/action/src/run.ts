@@ -4,7 +4,7 @@ import {
   PARTITION_FILTER_REQUIRED_REASON,
   renderComment,
 } from "@dataform-cost-check/core";
-import type { Config, DryRunner, Model, Report } from "@dataform-cost-check/core";
+import type { Config, DryRunner, Model, RefreshHistory, Report } from "@dataform-cost-check/core";
 
 export interface RunDeps {
   readonly config: Config;
@@ -13,6 +13,8 @@ export interface RunDeps {
   readonly runner: DryRunner;
   /** The `project-dir` input, so each Dataform project in a repository keeps its own comment. */
   readonly projectDir?: string;
+  /** Reads the changed models' last runs; called only when `config.history` is on. */
+  readonly readHistory?: (targets: readonly string[]) => Promise<RefreshHistory>;
 }
 
 export interface RunResult {
@@ -31,7 +33,11 @@ export const SUMMARY_MAX_LENGTH = 900_000;
 /** The whole check, minus I/O: diff, estimate, render. */
 export async function runCheck(deps: RunDeps): Promise<RunResult> {
   const [base, head] = await Promise.all([deps.loadModels("base"), deps.loadModels("head")]);
-  const report = await estimateChanges(diffModels(base, head), deps.runner, deps.config);
+  const estimated = await estimateChanges(diffModels(base, head), deps.runner, deps.config);
+  const report =
+    deps.config.history === true && deps.readHistory !== undefined && estimated.estimates.length > 0
+      ? { ...estimated, history: await deps.readHistory(estimated.estimates.map((e) => e.target)) }
+      : estimated;
   const projectDir = deps.projectDir ?? ".";
   return {
     report,

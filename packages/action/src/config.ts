@@ -13,6 +13,7 @@ export function parseConfig(text: string): Config {
     "limit_monthly",
     "default_runs_per_day",
     "runs_per_day",
+    "history",
   ]);
   for (const key of Object.keys(raw)) {
     if (!known.has(key)) throw new ConfigError(`unknown key "${key}"`);
@@ -50,7 +51,13 @@ export function parseConfig(text: string): Config {
       DEFAULT_CONFIG.defaultRunsPerDay,
     ),
     runsPerDay,
+    ...(raw.history !== undefined && { history: bool("history", raw.history) }),
   };
+}
+
+function bool(key: string, value: unknown): boolean {
+  if (typeof value !== "boolean") throw new ConfigError(`${key} must be true or false`);
+  return value;
 }
 
 export class ConfigError extends Error {

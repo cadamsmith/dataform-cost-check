@@ -44,7 +44,8 @@ dbt users already have cost checks; Dataform has had no packaged pull request ch
 - Bytes scanned before and after, per changed model
 - Flags the most common cause of a jump: a lost partition filter
 - One configurable spending limit that can fail the check
-- Last refresh duration per table, shown as history when permissions allow
+- Last refresh duration (and slot-hours, for slot-based pricing) per table, shown as history
+  when you opt in by granting job-listing access. Never a billed query, never a forecast.
 
 It runs in your own CI against your own Google Cloud project. Nothing is sent to a
 third-party service, and no one else holds your credentials.
@@ -73,7 +74,8 @@ jobs:
       - run: npm install -g @dataform/cli
       # Only if the project has a package.json (pins @dataform/core):
       # - run: npm ci
-      - uses: cadamsmith/dataform-cost-check@v1
+      # Pin the full commit SHA of a release, not a tag (see SECURITY.md).
+      - uses: cadamsmith/dataform-cost-check@<commit SHA> # v0.1.0
         with:
           config-path: dataform-cost-check.yml
 ```
@@ -161,6 +163,13 @@ run time. Runs per day come from your config file, not from your Dataform schedu
 with Dataform 3.x (CLI and core 3.0.61); Dataform 2.x projects (`dataform.json`) are untested.
 In a repository with several Dataform projects, run one job per `project-dir`: each keeps its
 own comment. See [docs/design.md](docs/design.md) for how each case is handled.
+
+## Security
+
+What runs where, what leaves your CI (dry runs to your BigQuery project, the comment to
+GitHub, and the Dataform CLI's own download of `@dataform/core` when you pin it in
+`workflow_settings.yaml`), how to pin and verify a release, and how to report a vulnerability:
+see [SECURITY.md](SECURITY.md).
 
 ## Contributing
 

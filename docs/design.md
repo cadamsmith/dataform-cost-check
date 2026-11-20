@@ -35,7 +35,11 @@ its scope, how the check works, and the hard cases it must handle.
 - Bytes scanned before and after, per changed model
 - Flags the most common cause: a lost partition filter
 - One configurable spending limit that can fail the check
-- Last refresh duration per table, as history, when permissions allow
+- Last refresh duration per table, as history, when permissions allow. Opt-in: shown only
+  when the team grants job-listing access (`bigquery.jobs.listAll`), read from the free
+  `jobs.list` API, never from a billed `INFORMATION_SCHEMA` query. For teams on slot-based
+  (Editions) pricing it includes slot-hours, labelled as history and never as dollars;
+  Editions dollars stay in the paid tier. Decided 2026-11-20.
 
 ### Paid tier (not in this repository; do not build here)
 

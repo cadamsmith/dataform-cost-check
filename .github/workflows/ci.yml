@@ -26,6 +26,11 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      # So the test that compiles fixtures/sample-project runs instead of skipping.
+      # Pinned to the version the adapter was built against.
+      - name: Install the Dataform CLI
+        run: npm install -g @dataform/cli@3.0.61
+
       - name: Lint
         run: pnpm lint
 

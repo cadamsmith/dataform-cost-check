@@ -130,7 +130,9 @@ reports "not estimated" with a reason.
 - **Views.** Creating a view costs nothing; the cost lands on whatever reads it. Views are
   skipped with that reason.
 - **Assertions, operations, pre/post operations.** Decide per type: estimate, skip, or
-  label. v1 skips assertions and operations with a reason.
+  label. Assertions are estimated like tables: each is a SELECT that scans its inputs on
+  every run, so its bytes are a real, recurring spend. Custom operations and pre/post
+  operations are skipped with a reason. Chosen 2026-11-20.
 - **Regions.** On-demand price varies by location. The price is configurable first:
   `price_per_tib_by_location` overrides `price_per_tib` for a model whose location
   matches, without regard to case (`core.pricePerTibFor`), and the comment lists the

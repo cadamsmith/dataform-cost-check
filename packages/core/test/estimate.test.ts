@@ -332,3 +332,15 @@ describe("limitCannotApply", () => {
     expect(e).toMatchObject({ status: "estimated", pricePerTib: 0, monthlyDelta: 0 });
   });
 });
+
+describe("assertions", () => {
+  it("estimates an assertion like a table: it scans its inputs on every run", async () => {
+    const a = model({ name: "orders_unique", type: "assertion", query: "aq" });
+    const e = await estimateChange(
+      { kind: "added", target: a.target, head: a },
+      new FakeDryRunner([["aq", { bytes: BYTES_PER_TIB }]]),
+      config,
+    );
+    expect(e).toMatchObject({ status: "estimated", type: "assertion", headBytes: BYTES_PER_TIB });
+  });
+});

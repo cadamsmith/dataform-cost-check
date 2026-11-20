@@ -10,14 +10,30 @@ export interface RunDeps {
 
 export interface RunResult {
   readonly report: Report;
+  /** The PR comment, capped below GitHub's comment size limit. */
   readonly comment: string;
+  /** The job summary, capped below GitHub's step summary limit. */
+  readonly summary: string;
+  /** The whole report, uncapped, for the job log. */
+  readonly full: string;
 }
+
+/** GitHub's step summary limit is 1 MiB; stay well below it. */
+export const SUMMARY_MAX_LENGTH = 900_000;
 
 /** The whole check, minus I/O: diff, estimate, render. */
 export async function runCheck(deps: RunDeps): Promise<RunResult> {
   const [base, head] = await Promise.all([deps.loadModels("base"), deps.loadModels("head")]);
   const report = await estimateChanges(diffModels(base, head), deps.runner, deps.config);
-  return { report, comment: renderComment(report) };
+  return {
+    report,
+    comment: renderComment(report),
+    summary: renderComment(report, {
+      maxLength: SUMMARY_MAX_LENGTH,
+      fullReportAt: "The job log has the full report.",
+    }),
+    full: renderComment(report, { maxLength: Number.POSITIVE_INFINITY }),
+  };
 }
 
 /**

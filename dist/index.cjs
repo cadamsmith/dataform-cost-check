@@ -45464,8 +45464,8 @@ var Summary = class {
    * @returns {Summary} summary instance
    */
   addTable(rows) {
-    const tableBody = rows.map((row) => {
-      const cells = row.map((cell) => {
+    const tableBody = rows.map((row2) => {
+      const cells = row2.map((cell) => {
         if (typeof cell === "string") {
           return this.wrap("td", cell);
         }
@@ -45933,43 +45933,88 @@ var UNITS = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"];
 function causeText(cause) {
   return `a filter on the partitioned table \`${cause.table}\` was removed`;
 }
-function renderComment(report) {
-  const estimated = report.estimates.filter((e2) => e2.status === "estimated");
-  const notEstimated = report.estimates.filter((e2) => e2.status !== "estimated");
-  const lines = [COMMENT_MARKER, "### Dataform Cost Check: BigQuery estimate", ""];
+var COMMENT_MAX_LENGTH = 6e4;
+var OVERFLOW_RESERVE = 200;
+function renderComment(report, {
+  maxLength = COMMENT_MAX_LENGTH,
+  fullReportAt = "The job summary has the full report."
+} = {}) {
+  const head = [COMMENT_MARKER, "### Dataform Cost Check: BigQuery estimate", ""];
+  const tail = footer(report);
   if (report.estimates.length === 0) {
-    lines.push("No models changed in this pull request, so there is nothing to estimate.", "");
-    lines.push(footer(report));
-    return lines.join("\n") + "\n";
+    return [
+      ...head,
+      "No models changed in this pull request, so there is nothing to estimate.",
+      "",
+      tail
+    ].join("\n") + "\n";
   }
-  lines.push(headline(report), "");
-  if (estimated.length > 0) {
-    lines.push(
-      "| Model | Change | Scanned per run (before \u2192 after) | Runs / day | Monthly estimate |",
-      "|---|---|---|--:|--:|"
-    );
+  head.push(headline(report), "");
+  const estimated = report.estimates.filter((e2) => e2.status === "estimated").sort(byImpact);
+  const notEstimated = report.estimates.filter((e2) => e2.status !== "estimated");
+  const body = [];
+  let length = [...head, tail].join("\n").length + OVERFLOW_RESERVE;
+  const fits = (lines) => {
+    const added = lines.reduce((sum, line) => sum + line.length + 1, 0);
+    if (length + added > maxLength) return false;
+    length += added;
+    return true;
+  };
+  const shown = [];
+  const tableHeader = [
+    "| Model | Change | Scanned per run (before \u2192 after) | Runs / day | Monthly estimate |",
+    "|---|---|---|--:|--:|"
+  ];
+  if (estimated.length > 0 && fits([...tableHeader, ""])) {
     for (const e2 of estimated) {
-      const monthly = e2.pricePerTib === 0 ? "bytes only" : formatUsd(e2.monthlyDelta, { signed: true });
-      lines.push(
-        `| \`${e2.name}\` | ${e2.kind} | ${formatBytes(e2.baseBytes)} \u2192 ${formatBytes(e2.headBytes)} | ${String(e2.runsPerDay)} | ${monthly} |`
-      );
+      if (!fits([row(e2)])) break;
+      shown.push(e2);
     }
-    lines.push("");
-    const notes = estimated.flatMap((e2) => [
-      ...e2.likelyCause === void 0 ? [] : [`- \`${e2.name}\`: likely cause: ${causeText(e2.likelyCause)}.`],
-      ...e2.fullRefreshBytes === void 0 ? [] : [
-        `- \`${e2.name}\`: incremental, estimated from its incremental query. A full refresh would scan up to ${formatBytes(e2.fullRefreshBytes)}, not included in the monthly estimate.`
-      ]
-    ]);
-    if (notes.length > 0) lines.push(...notes, "");
+    body.push(...tableHeader, ...shown.map(row), "");
+    const notes = [];
+    for (const e2 of shown) {
+      const lines = notesFor(e2);
+      if (lines.length === 0) continue;
+      if (!fits(lines)) break;
+      notes.push(...lines);
+    }
+    if (notes.length > 0 && fits([""])) body.push(...notes, "");
   }
-  if (notEstimated.length > 0) {
-    lines.push("**Not estimated**", "");
-    for (const e2 of notEstimated) lines.push(`- \`${e2.name}\` (${e2.kind}): ${e2.reason}`);
-    lines.push("");
+  let listed = 0;
+  if (notEstimated.length > 0 && fits(["**Not estimated**", "", ""])) {
+    const items = [];
+    for (const e2 of notEstimated) {
+      const line = `- \`${e2.name}\` (${e2.kind}): ${e2.reason}`;
+      if (!fits([line])) break;
+      items.push(line);
+    }
+    listed = items.length;
+    if (listed > 0) body.push("**Not estimated**", "", ...items, "");
   }
-  lines.push(footer(report));
-  return lines.join("\n") + "\n";
+  const omitted = report.estimates.length - shown.length - listed;
+  if (omitted > 0) {
+    const models = omitted === 1 ? "1 more model" : `${String(omitted)} more models`;
+    body.push(
+      `\u2026and ${models}, left out to keep this comment within GitHub's size limit. ${fullReportAt}`,
+      ""
+    );
+  }
+  return [...head, ...body, tail].join("\n") + "\n";
+}
+function byImpact(a, b) {
+  return Math.abs(b.monthlyDelta) - Math.abs(a.monthlyDelta) || Math.abs(b.headBytes - b.baseBytes) - Math.abs(a.headBytes - a.baseBytes);
+}
+function row(e2) {
+  const monthly = e2.pricePerTib === 0 ? "bytes only" : formatUsd(e2.monthlyDelta, { signed: true });
+  return `| \`${e2.name}\` | ${e2.kind} | ${formatBytes(e2.baseBytes)} \u2192 ${formatBytes(e2.headBytes)} | ${String(e2.runsPerDay)} | ${monthly} |`;
+}
+function notesFor(e2) {
+  return [
+    ...e2.likelyCause === void 0 ? [] : [`- \`${e2.name}\`: likely cause: ${causeText(e2.likelyCause)}.`],
+    ...e2.fullRefreshBytes === void 0 ? [] : [
+      `- \`${e2.name}\`: incremental, estimated from its incremental query. A full refresh would scan up to ${formatBytes(e2.fullRefreshBytes)}, not included in the monthly estimate.`
+    ]
+  ];
 }
 function headline(report) {
   const total = report.totalMonthlyDelta;
@@ -46318,10 +46363,19 @@ async function upsertStickyComment(options) {
 }
 
 // src/run.ts
+var SUMMARY_MAX_LENGTH = 9e5;
 async function runCheck(deps) {
   const [base, head] = await Promise.all([deps.loadModels("base"), deps.loadModels("head")]);
   const report = await estimateChanges(diffModels(base, head), deps.runner, deps.config);
-  return { report, comment: renderComment(report) };
+  return {
+    report,
+    comment: renderComment(report),
+    summary: renderComment(report, {
+      maxLength: SUMMARY_MAX_LENGTH,
+      fullReportAt: "The job log has the full report."
+    }),
+    full: renderComment(report, { maxLength: Number.POSITIVE_INFINITY })
+  };
 }
 function dryRunFailure(report) {
   const tried = report.estimates.filter(
@@ -46366,17 +46420,17 @@ async function main() {
     baseRef,
     (dir) => loadModels({ projectDir: (0, import_node_path3.join)(dir, projectDir) })
   );
-  const { report, comment } = await runCheck({
+  const { report, comment, summary: summary2, full } = await runCheck({
     config,
     loadModels: load,
     runner: limitConcurrency(new BigQueryDryRunner({ projectId }), MAX_CONCURRENT_DRY_RUNS)
   });
-  info(comment);
+  info(full);
   const details = failureDetails(report);
   if (details.length > 0) {
     info(["BigQuery's messages for the dry runs that failed:", ...details].join("\n"));
   }
-  await summary.addRaw(comment).write();
+  await summary.addRaw(summary2).write();
   setOutput("monthly-delta", report.totalMonthlyDelta.toFixed(2));
   setOutput("over-limit", String(report.overLimit));
   await postComment(pr, comment);

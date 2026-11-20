@@ -63,19 +63,19 @@ async function main(): Promise<void> {
           loadModels({ projectDir: join(dir, projectDir) }),
         );
 
-  const { report, comment } = await runCheck({
+  const { report, comment, summary, full } = await runCheck({
     config,
     loadModels: load,
     runner: limitConcurrency(new BigQueryDryRunner({ projectId }), MAX_CONCURRENT_DRY_RUNS),
   });
 
-  core.info(comment);
+  core.info(full);
   // Plain log lines, not warnings: annotations show up on the pull request.
   const details = failureDetails(report);
   if (details.length > 0) {
     core.info(["BigQuery's messages for the dry runs that failed:", ...details].join("\n"));
   }
-  await core.summary.addRaw(comment).write();
+  await core.summary.addRaw(summary).write();
   core.setOutput("monthly-delta", report.totalMonthlyDelta.toFixed(2));
   core.setOutput("over-limit", String(report.overLimit));
   await postComment(pr, comment);

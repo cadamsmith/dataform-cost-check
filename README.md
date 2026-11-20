@@ -1,8 +1,8 @@
 # Dataform Cost Check
 
-> **Status: pre-alpha.** The action compiles the Dataform project at base and head and
-> dry-runs changed models in BigQuery, but it writes the estimate to the job summary
-> instead of posting a pull request comment. Do not install it on real projects yet.
+> **Status: pre-alpha.** The action compiles the Dataform project at base and head,
+> dry-runs changed models in BigQuery and posts a sticky pull request comment, but it has
+> not yet run end to end in a real GitHub workflow. Do not install it on real projects yet.
 
 A GitHub Action that posts a BigQuery cost estimate on every pull request in a
 [Dataform](https://cloud.google.com/dataform) project: a price tag on every data change,
@@ -12,13 +12,26 @@ When a pull request opens, the action compiles the Dataform project at the base 
 commits, finds the models whose compiled SQL changed, asks BigQuery for a free dry-run byte
 count for each, and posts one sticky comment such as:
 
-> This change adds an estimated **+$225.00 / month**. :x: Over the $100.00 limit.
+<!-- BEGIN GENERATED: sample comment (pnpm readme) -->
+<!-- prettier-ignore-start -->
+> ### Dataform Cost Check: BigQuery estimate
 >
-> | Model          | Change   | Scanned per run (before → after) | Runs / day | Monthly estimate |
-> | -------------- | -------- | -------------------------------- | ---------: | ---------------: |
-> | `orders_daily` | modified | 40.96 GiB → 1.24 TiB             |          1 |         +$225.00 |
+> This change adds an estimated **+$246.97 / month**. :x: Over the $100.00 limit.
+>
+> | Model | Change | Scanned per run (before → after) | Runs / day | Monthly estimate |
+> |---|---|---|--:|--:|
+> | `orders_daily` | modified | 40.96 GiB → 1.24 TiB | 1 | +$225.00 |
+> | `customers` | added | 0 B → 5.00 GiB | 24 | +$21.97 |
 >
 > - `orders_daily`: likely cause: a filter on the partitioned table `proj.raw.orders` was removed.
+>
+> **Not estimated**
+>
+> - `orders_v` (modified): Views cost nothing to create; the cost lands on whatever reads them.
+>
+> <sub>Estimates are upper bounds from BigQuery dry runs, priced at $6.25 per TiB on-demand, with no free-tier deduction. If this project uses slot-based (Editions) pricing, bytes scanned do not map to dollars and these figures do not apply.</sub>
+<!-- prettier-ignore-end -->
+<!-- END GENERATED -->
 
 ## Who it is for
 
@@ -53,7 +66,10 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      # Authenticate to Google Cloud here (Workload Identity Federation).
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/POOL_ID/providers/PROVIDER_ID
+          service_account: dataform-cost-check@PROJECT_ID.iam.gserviceaccount.com
       - run: npm install -g @dataform/cli
       - uses: cadamsmith/dataform-cost-check@v1
         with:
@@ -79,6 +95,40 @@ default_runs_per_day: 1
 runs_per_day: # overrides by Dataform tag or model name
   hourly: 24
 ```
+
+## Permissions
+
+The action needs a Google Cloud service account that it signs in as without a key,
+through Workload Identity Federation. Grant it only:
+
+| Role                                               | Where                                          | Why                                                                                             |
+| -------------------------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| BigQuery Job User (`roles/bigquery.jobUser`)       | The project the dry runs run in (`project-id`) | `bigquery.jobs.create`, to start dry-run jobs                                                   |
+| BigQuery Data Viewer (`roles/bigquery.dataViewer`) | Each dataset your models read (or the project) | BigQuery checks read access on every table a dry run references, as it would for the real query |
+
+A dry run is free and reads no data: BigQuery only plans the query and reports the bytes it
+would scan. The action never runs a billable query and needs no write access. Data Viewer also covers the table metadata the action reads to tell which tables are
+partitioned, which it uses to name a lost partition filter.
+
+> These roles have not yet been tested on a project that grants nothing else (tracked in
+> #27). If a dry run fails with "permission denied", the job log has BigQuery's message.
+
+Example setup with `gcloud` (replace the capitalised values):
+
+```sh
+gcloud iam service-accounts create dataform-cost-check --project=PROJECT_ID
+SA=dataform-cost-check@PROJECT_ID.iam.gserviceaccount.com
+gcloud projects add-iam-policy-binding PROJECT_ID --member="serviceAccount:$SA" --role=roles/bigquery.jobUser
+gcloud projects add-iam-policy-binding PROJECT_ID --member="serviceAccount:$SA" --role=roles/bigquery.dataViewer
+# Let GitHub Actions runs from your repository sign in as it, through an existing
+# Workload Identity pool and provider:
+gcloud iam service-accounts add-iam-policy-binding "$SA" --project=PROJECT_ID \
+  --role=roles/iam.workloadIdentityUser \
+  --member="principalSet://iam.googleapis.com/projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/POOL_ID/attribute.repository/OWNER/REPO"
+```
+
+See [google-github-actions/auth](https://github.com/google-github-actions/auth) for
+creating the pool and provider.
 
 ## Limits to know
 

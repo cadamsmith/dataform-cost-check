@@ -1,8 +1,8 @@
 # Dataform Cost Check
 
-> **Status: pre-alpha.** The action compiles the Dataform project at base and head,
-> dry-runs changed models in BigQuery and posts a sticky pull request comment, but it has
-> not yet run end to end in a real GitHub workflow. Do not install it on real projects yet.
+> **Status: alpha (0.1.0).** It runs end to end in GitHub Actions with keyless sign-in to
+> Google Cloud, tested on a private Dataform 3 project with JavaScript-defined actions. Try it
+> on a non-critical repository first, and tell us what it gets wrong.
 
 A GitHub Action that posts a BigQuery cost estimate on every pull request in a
 [Dataform](https://cloud.google.com/dataform) project: a price tag on every data change,
@@ -50,7 +50,7 @@ dbt users already have cost checks; Dataform has had no packaged pull request ch
 It runs in your own CI against your own Google Cloud project. Nothing is sent to a
 third-party service, and no one else holds your credentials.
 
-## Usage (once released)
+## Usage
 
 ```yaml
 # .github/workflows/cost-check.yml

@@ -184,7 +184,10 @@ reports "not estimated" with a reason.
   a warning) instead of passing silently. No bytes-based limit: v1 keeps one spending
   limit. Chosen in #26.
 - **Estimate is an upper bound.** Say "estimate", never "cost". Do not deduct the monthly
-  free tier.
+  free tier. Checked 2026-11-20 on the sandbox (2 tables, 2 real runs each): the dry run
+  matched the bytes the real job processed exactly. Billed bytes were 0.6 to 1.1% higher,
+  because on-demand billing rounds each query up to the next MiB with a 10 MiB minimum, so
+  for tiny queries the bill can exceed the estimate by that rounding (a fraction of a cent).
 - **Partition filter detection.** A heuristic, surfaced as `Estimate.likelyCause` with the
   table name (`core.partitionFilterCause`). It fires when base and head both read the same
   partitioned table, and head reads at least 10 times as many bytes and at least 1 GiB more

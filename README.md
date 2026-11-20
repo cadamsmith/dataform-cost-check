@@ -29,7 +29,7 @@ count for each, and posts one sticky comment such as:
 >
 > - `orders_v` (modified): Views cost nothing to create; the cost lands on whatever reads them.
 >
-> <sub>Estimates are upper bounds from BigQuery dry runs, priced at $6.25 per TiB on-demand, with no free-tier deduction. If this project uses slot-based (Editions) pricing, bytes scanned do not map to dollars and these figures do not apply.</sub>
+> <sub>Estimates are upper bounds from BigQuery dry runs, priced at $6.25 per TiB on-demand, with no free-tier deduction. Runs per day come from `dataform-cost-check.yml`, not from your schedules. If this project uses slot-based (Editions) pricing, bytes scanned do not map to dollars and these figures do not apply.</sub>
 <!-- prettier-ignore-end -->
 <!-- END GENERATED -->
 
@@ -146,12 +146,21 @@ gcloud iam service-accounts add-iam-policy-binding "$SA" --project=PROJECT_ID \
 See [google-github-actions/auth](https://github.com/google-github-actions/auth) for
 creating the pool and provider.
 
+**VPC Service Controls.** If BigQuery sits inside a service perimeter, dry runs from
+GitHub-hosted runners are blocked like any other outside request. Add an ingress rule that
+allows the action's service account to call `bigquery.googleapis.com`, or run the job on a
+self-hosted runner inside the perimeter. Self-hosted runners need Node.js 24 (the action's
+runtime), Node.js and npm for the Dataform CLI, and `git`.
+
 ## Limits to know
 
 Figures are **estimates and upper bounds**: they come from dry runs, ignore caching, and do
 not deduct BigQuery's monthly free tier. They assume on-demand pricing. If your project uses
 slot-based (Editions) pricing, bytes scanned do not map to dollars. The action never predicts
-run time. See [docs/design.md](docs/design.md) for how each case is handled.
+run time. Runs per day come from your config file, not from your Dataform schedules. Tested
+with Dataform 3.x (CLI and core 3.0.61); Dataform 2.x projects (`dataform.json`) are untested.
+In a repository with several Dataform projects, run one job per `project-dir`: each keeps its
+own comment. See [docs/design.md](docs/design.md) for how each case is handled.
 
 ## Contributing
 

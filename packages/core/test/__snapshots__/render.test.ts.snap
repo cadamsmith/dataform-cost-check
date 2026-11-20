@@ -6,7 +6,7 @@ exports[`renderComment > renders a pull request with no model changes 1`] = `
 
 No models changed in this pull request, so there is nothing to estimate.
 
-<sub>Estimates are upper bounds from BigQuery dry runs, priced at $6.25 per TiB on-demand, with no free-tier deduction. If this project uses slot-based (Editions) pricing, bytes scanned do not map to dollars and these figures do not apply.</sub>
+<sub>Estimates are upper bounds from BigQuery dry runs, priced at $6.25 per TiB on-demand, with no free-tier deduction. Runs per day come from \`dataform-cost-check.yml\`, not from your schedules. If this project uses slot-based (Editions) pricing, bytes scanned do not map to dollars and these figures do not apply.</sub>
 "
 `;
 
@@ -20,7 +20,7 @@ This change saves an estimated **$0.92 / month**. Within the $100.00 limit.
 |---|---|---|--:|--:|
 | \`customers\` | removed | 5.00 GiB → 0 B | 1 | -$0.92 |
 
-<sub>Estimates are upper bounds from BigQuery dry runs, priced at $6.25 per TiB on-demand, with no free-tier deduction. If this project uses slot-based (Editions) pricing, bytes scanned do not map to dollars and these figures do not apply.</sub>
+<sub>Estimates are upper bounds from BigQuery dry runs, priced at $6.25 per TiB on-demand, with no free-tier deduction. Runs per day come from \`dataform-cost-check.yml\`, not from your schedules. If this project uses slot-based (Editions) pricing, bytes scanned do not map to dollars and these figures do not apply.</sub>
 "
 `;
 
@@ -43,7 +43,7 @@ This change adds an estimated **+$6,750.92 / month**. :x: Over the $100.00 limit
 - \`orders_v\` (modified): Views cost nothing to create; the cost lands on whatever reads them.
 - \`new_rollup\` (added): Dry run at head failed: BigQuery rejected the query. BigQuery's message is in the job log.
 
-<sub>Estimates are upper bounds from BigQuery dry runs, priced at $6.25 per TiB on-demand, with no free-tier deduction. If this project uses slot-based (Editions) pricing, bytes scanned do not map to dollars and these figures do not apply.</sub>
+<sub>Estimates are upper bounds from BigQuery dry runs, priced at $6.25 per TiB on-demand, with no free-tier deduction. Runs per day come from \`dataform-cost-check.yml\`, not from your schedules. If this project uses slot-based (Editions) pricing, bytes scanned do not map to dollars and these figures do not apply.</sub>
 "
 `;
 
@@ -58,7 +58,7 @@ None of the changed models were estimated.
 - \`orders_v\` (modified): Views cost nothing to create; the cost lands on whatever reads them.
 - \`new_rollup\` (added): Dry run at head failed: BigQuery rejected the query. BigQuery's message is in the job log.
 
-<sub>Estimates are upper bounds from BigQuery dry runs, priced at $6.25 per TiB on-demand, with no free-tier deduction. If this project uses slot-based (Editions) pricing, bytes scanned do not map to dollars and these figures do not apply.</sub>
+<sub>Estimates are upper bounds from BigQuery dry runs, priced at $6.25 per TiB on-demand, with no free-tier deduction. Runs per day come from \`dataform-cost-check.yml\`, not from your schedules. If this project uses slot-based (Editions) pricing, bytes scanned do not map to dollars and these figures do not apply.</sub>
 "
 `;
 
@@ -72,6 +72,6 @@ These models are priced at 0 per TiB (for example, slot-based pricing), so bytes
 |---|---|---|--:|--:|
 | \`slots_model\` | added | 0 B → 5.00 GiB | 1 | bytes only |
 
-<sub>Estimates are upper bounds from BigQuery dry runs, priced at 0 per TiB (bytes only) on-demand, with no free-tier deduction. If this project uses slot-based (Editions) pricing, bytes scanned do not map to dollars and these figures do not apply.</sub>
+<sub>Estimates are upper bounds from BigQuery dry runs, priced at 0 per TiB (bytes only) on-demand, with no free-tier deduction. Runs per day come from \`dataform-cost-check.yml\`, not from your schedules. If this project uses slot-based (Editions) pricing, bytes scanned do not map to dollars and these figures do not apply.</sub>
 "
 `;

@@ -1,6 +1,6 @@
 {
   "name": "@dataform-cost-check/dataform",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Adapter: run and parse `dataform compile --json` into core models.",
   "license": "MIT",

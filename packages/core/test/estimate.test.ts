@@ -386,3 +386,28 @@ describe("pre_operations variables", () => {
     expect(e).toMatchObject({ status: "estimated", headBytes: 10 });
   });
 });
+
+describe("new incremental models", () => {
+  const target = "proj.analytics.events_daily";
+  const inc = model({
+    name: "events_daily",
+    target,
+    type: "incremental",
+    query: "SELECT * FROM src",
+    incrementalQuery: `SELECT * FROM src WHERE ts > (SELECT MAX(ts) FROM \`${target}\`)`,
+  });
+  const runner = new FakeDryRunner([["SELECT * FROM src", { bytes: 3 * 1024 ** 3 }]], {
+    error: `Not found: Table ${target}`,
+    errorKind: "not-found",
+  });
+
+  it("reports the first full refresh instead of a dry-run error", async () => {
+    const e = await estimateChange({ kind: "added", target, head: inc }, runner, config);
+    expect(e).toMatchObject({
+      status: "unestimable",
+      newUpstream: target,
+      reason:
+        "New incremental model: its incremental query reads its own table, which this pull request creates, so the monthly estimate waits until it exists. Its first run, a full refresh, would scan up to 3.00 GiB.",
+    });
+  });
+});

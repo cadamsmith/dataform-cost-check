@@ -22,7 +22,17 @@ export function diffModels(base: readonly Model[], head: readonly Model[]): Mode
 }
 
 function sqlDiffers(a: Model, b: Model): boolean {
-  return a.type !== b.type || a.query !== b.query || a.incrementalQuery !== b.incrementalQuery;
+  return (
+    a.type !== b.type ||
+    a.query !== b.query ||
+    a.incrementalQuery !== b.incrementalQuery ||
+    !sameStatements(a.preOps, b.preOps) ||
+    !sameStatements(a.incrementalPreOps, b.incrementalPreOps)
+  );
+}
+
+function sameStatements(a: readonly string[] = [], b: readonly string[] = []): boolean {
+  return a.length === b.length && a.every((s, i) => s === b[i]);
 }
 
 function indexByTarget(models: readonly Model[], side: string): Map<string, Model> {

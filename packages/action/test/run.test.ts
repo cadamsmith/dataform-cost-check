@@ -106,6 +106,12 @@ describe("dryRunFailure", () => {
     expect(dryRunFailure(report([newUpstream, failed]))).toContain("1 tried");
   });
 
+  it("leaves models filtering on a pre_operations variable out of the count", () => {
+    const preOps = { ...failed, name: "inc", preOpsVariable: "checkpoint" } as const;
+    expect(dryRunFailure(report([preOps]))).toBeUndefined();
+    expect(dryRunFailure(report([preOps, failed]))).toContain("1 tried");
+  });
+
   it("passes when nothing needed a dry run", () => {
     expect(dryRunFailure(report([]))).toBeUndefined();
     expect(dryRunFailure(report([skipped]))).toBeUndefined();

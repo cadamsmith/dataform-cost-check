@@ -1,0 +1,184 @@
+{
+  "tables": [
+    {
+      "type": "incremental",
+      "target": {
+        "schema": "cost_check_sandbox",
+        "name": "terms_daily",
+        "database": "airfare-drift"
+      },
+      "query": "\n\n\n\nSELECT refresh_date, dma_name, term, rank\nFROM `bigquery-public-data.google_trends.top_terms`\nWHERE refresh_date > checkpoint\n",
+      "disabled": false,
+      "protected": false,
+      "preOps": [
+        "\n  DECLARE checkpoint DATE DEFAULT (\n    SELECT DATE_SUB(CURRENT_DATE(), INTERVAL 7 DAY)\n  );\n"
+      ],
+      "fileName": "definitions/terms_daily.sqlx",
+      "tags": ["daily"],
+      "incrementalQuery": "\n\n\n\nSELECT refresh_date, dma_name, term, rank\nFROM `bigquery-public-data.google_trends.top_terms`\nWHERE refresh_date > checkpoint\n",
+      "dependencyTargets": [
+        {
+          "schema": "google_trends",
+          "name": "top_terms",
+          "database": "bigquery-public-data"
+        }
+      ],
+      "incrementalPreOps": [
+        "\n  DECLARE checkpoint DATE DEFAULT (\n    SELECT MAX(refresh_date) FROM `airfare-drift.cost_check_sandbox.terms_daily`\n  );\n"
+      ],
+      "hermeticity": "NON_HERMETIC",
+      "canonicalTarget": {
+        "schema": "cost_check_sandbox",
+        "name": "terms_daily",
+        "database": "airfare-drift"
+      },
+      "enumType": "INCREMENTAL",
+      "onSchemaChange": "IGNORE"
+    },
+    {
+      "type": "table",
+      "target": {
+        "schema": "cost_check_sandbox",
+        "name": "top_terms_yesterday",
+        "database": "airfare-drift"
+      },
+      "query": "\n      SELECT dma_name, term, rank\n      FROM `bigquery-public-data.google_trends.top_terms`\n      WHERE refresh_date = DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY)\n    ",
+      "disabled": false,
+      "fileName": "definitions/trending.js",
+      "tags": ["hourly"],
+      "dependencyTargets": [
+        {
+          "schema": "google_trends",
+          "name": "top_terms",
+          "database": "bigquery-public-data"
+        }
+      ],
+      "hermeticity": "NON_HERMETIC",
+      "canonicalTarget": {
+        "schema": "cost_check_sandbox",
+        "name": "top_terms_yesterday",
+        "database": "airfare-drift"
+      },
+      "enumType": "TABLE"
+    },
+    {
+      "type": "table",
+      "target": {
+        "schema": "cost_check_sandbox",
+        "name": "top_rising_terms_yesterday",
+        "database": "airfare-drift"
+      },
+      "query": "\n      SELECT dma_name, term, rank\n      FROM `bigquery-public-data.google_trends.top_rising_terms`\n      WHERE refresh_date = DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY)\n    ",
+      "disabled": false,
+      "fileName": "definitions/trending.js",
+      "tags": ["hourly"],
+      "dependencyTargets": [
+        {
+          "schema": "google_trends",
+          "name": "top_rising_terms",
+          "database": "bigquery-public-data"
+        }
+      ],
+      "hermeticity": "NON_HERMETIC",
+      "canonicalTarget": {
+        "schema": "cost_check_sandbox",
+        "name": "top_rising_terms_yesterday",
+        "database": "airfare-drift"
+      },
+      "enumType": "TABLE"
+    }
+  ],
+  "assertions": [
+    {
+      "query": "SELECT * FROM `bigquery-public-data.google_trends.top_terms` WHERE refresh_date = DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY) AND rank IS NULL",
+      "fileName": "definitions/trending.js",
+      "target": {
+        "schema": "cost_check_sandbox_assertions",
+        "name": "top_terms_have_rank",
+        "database": "airfare-drift"
+      },
+      "dependencyTargets": [
+        {
+          "schema": "google_trends",
+          "name": "top_terms",
+          "database": "bigquery-public-data"
+        }
+      ],
+      "canonicalTarget": {
+        "schema": "cost_check_sandbox_assertions",
+        "name": "top_terms_have_rank",
+        "database": "airfare-drift"
+      }
+    }
+  ],
+  "projectConfig": {
+    "warehouse": "bigquery",
+    "defaultSchema": "cost_check_sandbox",
+    "assertionSchema": "cost_check_sandbox_assertions",
+    "defaultDatabase": "airfare-drift",
+    "defaultLocation": "US"
+  },
+  "graphErrors": {},
+  "declarations": [
+    {
+      "target": {
+        "schema": "google_trends",
+        "name": "top_terms",
+        "database": "bigquery-public-data"
+      },
+      "fileName": "definitions/sources.js",
+      "canonicalTarget": {
+        "schema": "google_trends",
+        "name": "top_terms",
+        "database": "bigquery-public-data"
+      }
+    },
+    {
+      "target": {
+        "schema": "google_trends",
+        "name": "top_rising_terms",
+        "database": "bigquery-public-data"
+      },
+      "fileName": "definitions/sources.js",
+      "canonicalTarget": {
+        "schema": "google_trends",
+        "name": "top_rising_terms",
+        "database": "bigquery-public-data"
+      }
+    }
+  ],
+  "dataformCoreVersion": "3.0.61",
+  "targets": [
+    {
+      "schema": "google_trends",
+      "name": "top_terms",
+      "database": "bigquery-public-data"
+    },
+    {
+      "schema": "google_trends",
+      "name": "top_rising_terms",
+      "database": "bigquery-public-data"
+    },
+    {
+      "schema": "cost_check_sandbox",
+      "name": "terms_daily",
+      "database": "airfare-drift"
+    },
+    {
+      "schema": "cost_check_sandbox",
+      "name": "top_terms_yesterday",
+      "database": "airfare-drift"
+    },
+    {
+      "schema": "cost_check_sandbox",
+      "name": "top_rising_terms_yesterday",
+      "database": "airfare-drift"
+    },
+    {
+      "schema": "cost_check_sandbox_assertions",
+      "name": "top_terms_have_rank",
+      "database": "airfare-drift"
+    }
+  ],
+  "jitData": {}
+}

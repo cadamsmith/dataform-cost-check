@@ -53,7 +53,10 @@ export function dryRunFailure(report: Report): string | undefined {
   const tried = report.estimates.filter(
     (e) =>
       e.status !== "skipped" &&
-      !(e.status === "unestimable" && (e.newUpstream !== undefined || dropsRequiredFilter(e))),
+      !(
+        e.status === "unestimable" &&
+        (e.newUpstream !== undefined || e.preOpsVariable !== undefined || dropsRequiredFilter(e))
+      ),
   );
   const failed = tried.filter((e) => e.status === "unestimable");
   const first = failed[0];

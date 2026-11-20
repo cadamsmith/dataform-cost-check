@@ -34,3 +34,12 @@ describe("diffModels", () => {
     expect(() => diffModels([a, a], [])).toThrow(/Duplicate target in base/);
   });
 });
+
+describe("diffModels and pre_operations", () => {
+  it("treats a change to pre-operations alone as a modified model", () => {
+    const base = model({ name: "inc", preOps: ["DECLARE a INT64 DEFAULT 1;"] });
+    const head = { ...base, preOps: ["DECLARE a INT64 DEFAULT 2;"] };
+    expect(diffModels([base], [head]).map((c) => c.kind)).toEqual(["modified"]);
+    expect(diffModels([base], [{ ...base }])).toEqual([]);
+  });
+});

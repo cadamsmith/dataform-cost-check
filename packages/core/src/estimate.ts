@@ -77,6 +77,25 @@ export function steadyStateSql(model: Model): string {
   return model.incrementalQuery ?? model.query;
 }
 
+/** The pre-operations that run before `steadyStateSql`. */
+function steadyStatePreOps(model: Model): readonly string[] {
+  return (model.incrementalQuery !== undefined ? model.incrementalPreOps : model.preOps) ?? [];
+}
+
+/**
+ * The first variable that `pre_operations` declare and `sql` uses, if any. A dry run of
+ * the query alone fails on it, and a dry run of pre-operations plus query counts 0 bytes
+ * for the filtered statement (measured 2026-11-20), so such a query is not estimated.
+ */
+export function preOpsVariableIn(sql: string, preOps: readonly string[]): string | undefined {
+  const declared = preOps.flatMap((statement) =>
+    [...statement.matchAll(/\bDECLARE\s+([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*)/gi)].flatMap((m) =>
+      (m[1] ?? "").split(",").map((name) => name.trim()),
+    ),
+  );
+  return declared.find((name) => new RegExp(`\\b${name}\\b`, "i").test(sql));
+}
+
 function estimable(model: Model): Model | undefined {
   return SKIP_REASONS[model.type] === undefined ? model : undefined;
 }
@@ -117,10 +136,26 @@ export async function estimateChange(
     return { status: "skipped", ...common, reason: SKIP_REASONS[model.type] ?? "Not estimated." };
   }
 
+  for (const side of [base, head]) {
+    if (side === undefined) continue;
+    const variable = preOpsVariableIn(steadyStateSql(side), steadyStatePreOps(side));
+    if (variable !== undefined) {
+      return {
+        status: "unestimable",
+        ...common,
+        reason: `Filters on \`${variable}\`, a variable set in pre_operations, which a dry run cannot size.`,
+        preOpsVariable: variable,
+      };
+    }
+  }
+
   const [baseResult, headResult, fullRefreshResult] = await Promise.all([
     base === undefined ? { bytes: 0 } : runner.estimate(steadyStateSql(base), base.location),
     head === undefined ? { bytes: 0 } : runner.estimate(steadyStateSql(head), head.location),
-    head?.incrementalQuery === undefined ? undefined : runner.estimate(head.query, head.location),
+    head?.incrementalQuery === undefined ||
+    preOpsVariableIn(head.query, head.preOps ?? []) !== undefined
+      ? undefined
+      : runner.estimate(head.query, head.location),
   ]);
 
   if ("error" in baseResult) {

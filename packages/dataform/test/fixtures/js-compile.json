@@ -5,7 +5,7 @@
       "target": {
         "schema": "cost_check_sandbox",
         "name": "terms_daily",
-        "database": "airfare-drift"
+        "database": "cost-check-sandbox"
       },
       "query": "\n\n\n\nSELECT refresh_date, dma_name, term, rank\nFROM `bigquery-public-data.google_trends.top_terms`\nWHERE refresh_date > checkpoint\n",
       "disabled": false,
@@ -24,13 +24,13 @@
         }
       ],
       "incrementalPreOps": [
-        "\n  DECLARE checkpoint DATE DEFAULT (\n    SELECT MAX(refresh_date) FROM `airfare-drift.cost_check_sandbox.terms_daily`\n  );\n"
+        "\n  DECLARE checkpoint DATE DEFAULT (\n    SELECT MAX(refresh_date) FROM `cost-check-sandbox.cost_check_sandbox.terms_daily`\n  );\n"
       ],
       "hermeticity": "NON_HERMETIC",
       "canonicalTarget": {
         "schema": "cost_check_sandbox",
         "name": "terms_daily",
-        "database": "airfare-drift"
+        "database": "cost-check-sandbox"
       },
       "enumType": "INCREMENTAL",
       "onSchemaChange": "IGNORE"
@@ -40,7 +40,7 @@
       "target": {
         "schema": "cost_check_sandbox",
         "name": "top_terms_yesterday",
-        "database": "airfare-drift"
+        "database": "cost-check-sandbox"
       },
       "query": "\n      SELECT dma_name, term, rank\n      FROM `bigquery-public-data.google_trends.top_terms`\n      WHERE refresh_date = DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY)\n    ",
       "disabled": false,
@@ -57,7 +57,7 @@
       "canonicalTarget": {
         "schema": "cost_check_sandbox",
         "name": "top_terms_yesterday",
-        "database": "airfare-drift"
+        "database": "cost-check-sandbox"
       },
       "enumType": "TABLE"
     },
@@ -66,7 +66,7 @@
       "target": {
         "schema": "cost_check_sandbox",
         "name": "top_rising_terms_yesterday",
-        "database": "airfare-drift"
+        "database": "cost-check-sandbox"
       },
       "query": "\n      SELECT dma_name, term, rank\n      FROM `bigquery-public-data.google_trends.top_rising_terms`\n      WHERE refresh_date = DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY)\n    ",
       "disabled": false,
@@ -83,7 +83,7 @@
       "canonicalTarget": {
         "schema": "cost_check_sandbox",
         "name": "top_rising_terms_yesterday",
-        "database": "airfare-drift"
+        "database": "cost-check-sandbox"
       },
       "enumType": "TABLE"
     }
@@ -95,7 +95,7 @@
       "target": {
         "schema": "cost_check_sandbox_assertions",
         "name": "top_terms_have_rank",
-        "database": "airfare-drift"
+        "database": "cost-check-sandbox"
       },
       "dependencyTargets": [
         {
@@ -107,7 +107,7 @@
       "canonicalTarget": {
         "schema": "cost_check_sandbox_assertions",
         "name": "top_terms_have_rank",
-        "database": "airfare-drift"
+        "database": "cost-check-sandbox"
       }
     }
   ],
@@ -115,7 +115,7 @@
     "warehouse": "bigquery",
     "defaultSchema": "cost_check_sandbox",
     "assertionSchema": "cost_check_sandbox_assertions",
-    "defaultDatabase": "airfare-drift",
+    "defaultDatabase": "cost-check-sandbox",
     "defaultLocation": "US"
   },
   "graphErrors": {},
@@ -162,22 +162,22 @@
     {
       "schema": "cost_check_sandbox",
       "name": "terms_daily",
-      "database": "airfare-drift"
+      "database": "cost-check-sandbox"
     },
     {
       "schema": "cost_check_sandbox",
       "name": "top_terms_yesterday",
-      "database": "airfare-drift"
+      "database": "cost-check-sandbox"
     },
     {
       "schema": "cost_check_sandbox",
       "name": "top_rising_terms_yesterday",
-      "database": "airfare-drift"
+      "database": "cost-check-sandbox"
     },
     {
       "schema": "cost_check_sandbox_assertions",
       "name": "top_terms_have_rank",
-      "database": "airfare-drift"
+      "database": "cost-check-sandbox"
     }
   ],
   "jitData": {}

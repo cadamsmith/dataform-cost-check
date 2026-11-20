@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping. The project is pre-alpha, so open an issue before starting anything
+Thanks for helping. The project is in alpha, so open an issue before starting anything
 large.
 
 ## Setup
@@ -12,6 +12,7 @@ corepack enable
 pnpm install
 pnpm check   # lint, format check, typecheck, tests
 pnpm build   # bundle the action into dist/
+pnpm readme  # regenerate the README's sample comment after a change to the comment
 ```
 
 ## Layout
@@ -22,17 +23,23 @@ dist/               # Committed, bundled action. Rebuild with `pnpm build`.
 packages/
   core/             # Pure logic: diff, pricing, limits, comment rendering. No network.
   dataform/         # Adapter: runs and parses `dataform compile --json` into core models
-  bigquery/         # DryRunner implementation against the BigQuery API
+  bigquery/         # Dry runs, partition lookups and job history against the BigQuery API
   action/           # Action entry point: inputs, config, sticky comment, exit code
 fixtures/
   sample-project/   # Tiny Dataform project used in tests
+packages/dataform/test/fixtures/
+  sample-compile.json  # Compile output of fixtures/sample-project (CLI 3.0.61)
+  js-compile.json      # A JavaScript-defined project: publish() loops, includes/, pre-operations
+  v2-cli-stdout.txt    # Raw stdout of a Dataform 2.x CLI (2.9.0), log line included
 docs/
   design.md         # Decisions, scope, and the hard cases
 ```
 
 The key seam is the `DryRunner` interface in `core`:
-`estimate(sql, location) -> { bytes } | { error }`. Tests use `FakeDryRunner`. Only
-`packages/bigquery` may touch the network.
+`estimate(sql, location) -> { bytes, partitionedTables? } | { error, errorKind }`. Tests use
+`FakeDryRunner`. `error` is BigQuery's message, for the job log only; the comment shows
+`errorKind`. Only `packages/bigquery` talks to Google Cloud; `packages/action` also calls the
+GitHub API to post the comment.
 
 The core engine takes plain compiled SQL. Dataform is the first adapter on top of it, so
 other SQL sources can be added later without a rewrite.
@@ -52,3 +59,11 @@ other SQL sources can be added later without a rewrite.
   stale.
 - User-facing text says "estimate", never "cost" as a fact.
 - Keep `core` free of I/O.
+
+## Releases
+
+Merge a version bump (the four `packages/*/package.json` files, the log line in
+`packages/action/src/main.ts`, README and SECURITY.md), then push an annotated tag
+`vX.Y.Z`. The release workflow re-runs `pnpm check`, refuses to release if `dist/` does not
+match a fresh build, attests `dist/index.cjs` once the repository is public, and creates
+the GitHub release. Users pin the tag's full commit SHA.

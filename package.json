@@ -11,6 +11,7 @@
     "format:check": "prettier --check .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
+    "readme": "UPDATE_README=1 vitest run packages/core/test/readme.test.ts",
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test"
   },
   "engines": {

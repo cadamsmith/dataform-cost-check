@@ -46316,9 +46316,18 @@ function compilationErrors(output) {
 function compilationErrorsIn(stdout) {
   if (!stdout) return [];
   try {
-    return compilationErrors(JSON.parse(stdout));
+    return compilationErrors(parseCliJson(stdout));
   } catch {
     return [];
+  }
+}
+function parseCliJson(stdout) {
+  try {
+    return JSON.parse(stdout);
+  } catch (error2) {
+    const start = stdout.search(/^\{\s*$/m);
+    if (start <= 0) throw error2;
+    return JSON.parse(stdout.slice(start));
   }
 }
 async function compileProject(options) {
@@ -46341,7 +46350,7 @@ async function compileProject(options) {
     if (errors2.length > 0) throw new DataformCompilationError(errors2);
     throw err;
   }
-  const output = JSON.parse(stdout);
+  const output = parseCliJson(stdout);
   const errors = compilationErrors(output);
   if (errors.length > 0) throw new DataformCompilationError(errors);
   return output;

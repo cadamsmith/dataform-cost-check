@@ -1,0 +1,71 @@
+{"level":"INFO","message":"[9:52:20.837 PM]: Configuring logger with level: 2, filePath: undefined, additionalLogToConsole: undefined"}
+{
+    "tables": [
+        {
+            "type": "table",
+            "target": {
+                "schema": "analytics",
+                "name": "js_table",
+                "database": "cost-check-sample"
+            },
+            "query": "SELECT 1 AS x",
+            "disabled": false,
+            "fileName": "definitions/js.js",
+            "canonicalTarget": {
+                "schema": "analytics",
+                "name": "js_table",
+                "database": "cost-check-sample"
+            },
+            "enumType": "TABLE"
+        },
+        {
+            "type": "incremental",
+            "target": {
+                "schema": "analytics",
+                "name": "orders",
+                "database": "cost-check-sample"
+            },
+            "query": "\n\nSELECT * FROM `bigquery-public-data.google_trends.top_terms` WHERE refresh_date > checkpoint\n",
+            "disabled": false,
+            "preOps": [
+                " DECLARE checkpoint DATE DEFAULT CURRENT_DATE(); "
+            ],
+            "fileName": "definitions/orders.sqlx",
+            "tags": [
+                "daily"
+            ],
+            "incrementalQuery": "\n\nSELECT * FROM `bigquery-public-data.google_trends.top_terms` WHERE refresh_date > checkpoint\n",
+            "incrementalPreOps": [
+                " DECLARE checkpoint DATE DEFAULT CURRENT_DATE(); "
+            ],
+            "canonicalTarget": {
+                "schema": "analytics",
+                "name": "orders",
+                "database": "cost-check-sample"
+            },
+            "enumType": "INCREMENTAL"
+        }
+    ],
+    "projectConfig": {
+        "warehouse": "bigquery",
+        "defaultSchema": "analytics",
+        "assertionSchema": "analytics_assertions",
+        "defaultDatabase": "cost-check-sample",
+        "defaultLocation": "US"
+    },
+    "graphErrors": {},
+    "dataformCoreVersion": "2.9.0",
+    "targets": [
+        {
+            "schema": "analytics",
+            "name": "js_table",
+            "database": "cost-check-sample"
+        },
+        {
+            "schema": "analytics",
+            "name": "orders",
+            "database": "cost-check-sample"
+        }
+    ]
+}
+

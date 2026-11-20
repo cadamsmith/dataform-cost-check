@@ -2,5 +2,3 @@ packages:
   - packages/*
 allowBuilds:
   esbuild: true
-  # A dependency of @dataform/cli. Its install script is not needed to compile, so it stays off.
-  protobufjs: false

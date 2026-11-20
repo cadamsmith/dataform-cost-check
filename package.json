@@ -19,7 +19,6 @@
   },
   "type": "module",
   "devDependencies": {
-    "@dataform/cli": "3.0.61",
     "@eslint/js": "^10.0.1",
     "@types/node": "^24.19.2",
     "esbuild": "^0.28.2",

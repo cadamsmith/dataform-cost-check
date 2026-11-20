@@ -1,4 +1,5 @@
 import { exceedsLimit, monthlyDelta, pricePerTibFor, runsPerDayFor } from "./pricing.ts";
+import { formatBytes } from "./render.ts";
 import type {
   Config,
   DryRunErrorKind,
@@ -166,6 +167,26 @@ export async function estimateChange(
       head === undefined
         ? undefined
         : readsNewTarget(steadyStateSql(head), change.target, newTargets);
+    if (
+      change.kind === "added" &&
+      head?.incrementalQuery !== undefined &&
+      steadyStateSql(head).includes(`\`${change.target}\``)
+    ) {
+      // A new incremental model's incremental query reads its own table, which does not
+      // exist yet. Its first run is a full refresh, which can be sized.
+      const firstRun =
+        fullRefreshResult !== undefined && "bytes" in fullRefreshResult
+          ? ` Its first run, a full refresh, would scan up to ${formatBytes(fullRefreshResult.bytes)}.`
+          : "";
+      return {
+        status: "unestimable",
+        ...common,
+        reason: `New incremental model: its incremental query reads its own table, which this pull request creates, so the monthly estimate waits until it exists.${firstRun}`,
+        errorKind: headResult.errorKind,
+        detail: headResult.error,
+        newUpstream: change.target,
+      };
+    }
     if (upstream !== undefined) {
       return {
         status: "unestimable",

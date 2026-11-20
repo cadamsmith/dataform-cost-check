@@ -45815,153 +45815,6 @@ function indexByTarget(models, side) {
   return map;
 }
 
-// ../core/src/estimate.ts
-var PARTITION_JUMP_RATIO = 10;
-var PARTITION_JUMP_MIN_BYTES = 2 ** 30;
-var ERROR_KIND_TEXT = {
-  "permission-denied": "permission denied",
-  "api-disabled": "the BigQuery API is not enabled in the dry-run project",
-  "not-found": "a table or dataset it reads was not found",
-  "partition-filter-required": "a table it reads requires a partition filter and the query has none, so it would also fail when it runs",
-  "query-error": "BigQuery rejected the query",
-  unknown: "the dry run returned an error"
-};
-var PARTITION_FILTER_REQUIRED_REASON = "Reads a table that requires a partition filter, and this change leaves the query without one, so it would fail when it runs. This fails the check.";
-function dryRunFailed(side, result) {
-  return {
-    status: "unestimable",
-    reason: `Dry run at ${side} failed: ${ERROR_KIND_TEXT[result.errorKind]}. BigQuery's message is in the job log.`,
-    errorKind: result.errorKind,
-    detail: result.error
-  };
-}
-function partitionFilterCause(base, head) {
-  if (base.bytes <= 0) return void 0;
-  if (head.bytes < base.bytes * PARTITION_JUMP_RATIO) return void 0;
-  if (head.bytes - base.bytes < PARTITION_JUMP_MIN_BYTES) return void 0;
-  const baseTables = new Set(base.partitionedTables ?? []);
-  const table = (head.partitionedTables ?? []).find((t2) => baseTables.has(t2));
-  return table === void 0 ? void 0 : { kind: "partition-filter-removed", table };
-}
-var SKIP_REASONS = {
-  view: "Views cost nothing to create; the cost lands on whatever reads them.",
-  operations: "Custom operations are not estimated yet."
-};
-function steadyStateSql(model) {
-  return model.incrementalQuery ?? model.query;
-}
-function steadyStatePreOps(model) {
-  return (model.incrementalQuery !== void 0 ? model.incrementalPreOps : model.preOps) ?? [];
-}
-function preOpsVariableIn(sql, preOps) {
-  const declared = preOps.flatMap(
-    (statement) => [...statement.matchAll(/\bDECLARE\s+([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*)/gi)].flatMap(
-      (m2) => (m2[1] ?? "").split(",").map((name) => name.trim())
-    )
-  );
-  return declared.find((name) => new RegExp(`\\b${name}\\b`, "i").test(sql));
-}
-function estimable(model) {
-  return SKIP_REASONS[model.type] === void 0 ? model : void 0;
-}
-function readsNewTarget(sql, ownTarget, newTargets) {
-  for (const t2 of newTargets) if (t2 !== ownTarget && sql.includes(`\`${t2}\``)) return t2;
-  return void 0;
-}
-async function estimateChange(change, runner, config, newTargets = /* @__PURE__ */ new Set()) {
-  const model = change.kind === "removed" ? change.base : change.head;
-  const common = { target: change.target, name: model.name, kind: change.kind, type: model.type };
-  const base = change.kind === "added" ? void 0 : estimable(change.base);
-  const head = change.kind === "removed" ? void 0 : estimable(change.head);
-  if (base === void 0 && head === void 0) {
-    return { status: "skipped", ...common, reason: SKIP_REASONS[model.type] ?? "Not estimated." };
-  }
-  for (const side of [base, head]) {
-    if (side === void 0) continue;
-    const variable = preOpsVariableIn(steadyStateSql(side), steadyStatePreOps(side));
-    if (variable !== void 0) {
-      return {
-        status: "unestimable",
-        ...common,
-        reason: `Filters on \`${variable}\`, a variable set in pre_operations, which a dry run cannot size.`,
-        preOpsVariable: variable
-      };
-    }
-  }
-  const [baseResult, headResult, fullRefreshResult] = await Promise.all([
-    base === void 0 ? { bytes: 0 } : runner.estimate(steadyStateSql(base), base.location),
-    head === void 0 ? { bytes: 0 } : runner.estimate(steadyStateSql(head), head.location),
-    head?.incrementalQuery === void 0 || preOpsVariableIn(head.query, head.preOps ?? []) !== void 0 ? void 0 : runner.estimate(head.query, head.location)
-  ]);
-  if ("error" in baseResult) {
-    return { ...common, ...dryRunFailed("base", baseResult) };
-  }
-  if ("error" in headResult) {
-    const upstream = head === void 0 ? void 0 : readsNewTarget(steadyStateSql(head), change.target, newTargets);
-    if (upstream !== void 0) {
-      return {
-        status: "unestimable",
-        ...common,
-        reason: `Reads \`${upstream}\`, which this pull request creates, so it can only be estimated once that table exists.`,
-        errorKind: headResult.errorKind,
-        detail: headResult.error,
-        newUpstream: upstream
-      };
-    }
-    if (headResult.errorKind === "partition-filter-required") {
-      return {
-        status: "unestimable",
-        ...common,
-        reason: `${PARTITION_FILTER_REQUIRED_REASON} BigQuery's message is in the job log.`,
-        errorKind: headResult.errorKind,
-        detail: headResult.error
-      };
-    }
-    return { ...common, ...dryRunFailed("head", headResult) };
-  }
-  const runsPerDay = runsPerDayFor(model, config);
-  const pricePerTib = pricePerTibFor(model, config);
-  const likelyCause = partitionFilterCause(baseResult, headResult);
-  return {
-    status: "estimated",
-    ...common,
-    baseBytes: baseResult.bytes,
-    headBytes: headResult.bytes,
-    runsPerDay,
-    pricePerTib,
-    monthlyDelta: monthlyDelta(baseResult.bytes, headResult.bytes, pricePerTib, runsPerDay),
-    ...likelyCause !== void 0 && { likelyCause },
-    ...fullRefreshResult !== void 0 && "bytes" in fullRefreshResult && { fullRefreshBytes: fullRefreshResult.bytes }
-  };
-}
-async function estimateChanges(changes, runner, config) {
-  const newTargets = new Set(changes.filter((c) => c.kind === "added").map((c) => c.target));
-  const estimates = await Promise.all(
-    changes.map((c) => estimateChange(c, runner, config, newTargets))
-  );
-  return buildReport(estimates, config);
-}
-function limitCannotApply(report) {
-  const estimated = report.estimates.filter((e2) => e2.status === "estimated");
-  return report.limitMonthly !== null && estimated.length > 0 && estimated.every((e2) => e2.pricePerTib === 0);
-}
-function buildReport(estimates, config) {
-  const totalMonthlyDelta = estimates.reduce(
-    (sum, e2) => e2.status === "estimated" ? sum + e2.monthlyDelta : sum,
-    0
-  );
-  return {
-    estimates,
-    totalMonthlyDelta,
-    pricePerTib: config.pricePerTib,
-    ...config.pricePerTibByLocation !== void 0 && {
-      pricePerTibByLocation: config.pricePerTibByLocation
-    },
-    limitMonthly: config.limitMonthly,
-    overLimit: exceedsLimit(totalMonthlyDelta, config.limitMonthly)
-  };
-}
-
 // ../core/src/render.ts
 var COMMENT_MARKER = "<!-- dataform-cost-check -->";
 var UNITS = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"];
@@ -46105,6 +45958,164 @@ function formatUsd(amount, { signed = false } = {}) {
   const body = abs.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const sign = amount < 0 ? "-" : signed && amount > 0 ? "+" : "";
   return `${sign}$${body}`;
+}
+
+// ../core/src/estimate.ts
+var PARTITION_JUMP_RATIO = 10;
+var PARTITION_JUMP_MIN_BYTES = 2 ** 30;
+var ERROR_KIND_TEXT = {
+  "permission-denied": "permission denied",
+  "api-disabled": "the BigQuery API is not enabled in the dry-run project",
+  "not-found": "a table or dataset it reads was not found",
+  "partition-filter-required": "a table it reads requires a partition filter and the query has none, so it would also fail when it runs",
+  "query-error": "BigQuery rejected the query",
+  unknown: "the dry run returned an error"
+};
+var PARTITION_FILTER_REQUIRED_REASON = "Reads a table that requires a partition filter, and this change leaves the query without one, so it would fail when it runs. This fails the check.";
+function dryRunFailed(side, result) {
+  return {
+    status: "unestimable",
+    reason: `Dry run at ${side} failed: ${ERROR_KIND_TEXT[result.errorKind]}. BigQuery's message is in the job log.`,
+    errorKind: result.errorKind,
+    detail: result.error
+  };
+}
+function partitionFilterCause(base, head) {
+  if (base.bytes <= 0) return void 0;
+  if (head.bytes < base.bytes * PARTITION_JUMP_RATIO) return void 0;
+  if (head.bytes - base.bytes < PARTITION_JUMP_MIN_BYTES) return void 0;
+  const baseTables = new Set(base.partitionedTables ?? []);
+  const table = (head.partitionedTables ?? []).find((t2) => baseTables.has(t2));
+  return table === void 0 ? void 0 : { kind: "partition-filter-removed", table };
+}
+var SKIP_REASONS = {
+  view: "Views cost nothing to create; the cost lands on whatever reads them.",
+  operations: "Custom operations are not estimated yet."
+};
+function steadyStateSql(model) {
+  return model.incrementalQuery ?? model.query;
+}
+function steadyStatePreOps(model) {
+  return (model.incrementalQuery !== void 0 ? model.incrementalPreOps : model.preOps) ?? [];
+}
+function preOpsVariableIn(sql, preOps) {
+  const declared = preOps.flatMap(
+    (statement) => [...statement.matchAll(/\bDECLARE\s+([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*)/gi)].flatMap(
+      (m2) => (m2[1] ?? "").split(",").map((name) => name.trim())
+    )
+  );
+  return declared.find((name) => new RegExp(`\\b${name}\\b`, "i").test(sql));
+}
+function estimable(model) {
+  return SKIP_REASONS[model.type] === void 0 ? model : void 0;
+}
+function readsNewTarget(sql, ownTarget, newTargets) {
+  for (const t2 of newTargets) if (t2 !== ownTarget && sql.includes(`\`${t2}\``)) return t2;
+  return void 0;
+}
+async function estimateChange(change, runner, config, newTargets = /* @__PURE__ */ new Set()) {
+  const model = change.kind === "removed" ? change.base : change.head;
+  const common = { target: change.target, name: model.name, kind: change.kind, type: model.type };
+  const base = change.kind === "added" ? void 0 : estimable(change.base);
+  const head = change.kind === "removed" ? void 0 : estimable(change.head);
+  if (base === void 0 && head === void 0) {
+    return { status: "skipped", ...common, reason: SKIP_REASONS[model.type] ?? "Not estimated." };
+  }
+  for (const side of [base, head]) {
+    if (side === void 0) continue;
+    const variable = preOpsVariableIn(steadyStateSql(side), steadyStatePreOps(side));
+    if (variable !== void 0) {
+      return {
+        status: "unestimable",
+        ...common,
+        reason: `Filters on \`${variable}\`, a variable set in pre_operations, which a dry run cannot size.`,
+        preOpsVariable: variable
+      };
+    }
+  }
+  const [baseResult, headResult, fullRefreshResult] = await Promise.all([
+    base === void 0 ? { bytes: 0 } : runner.estimate(steadyStateSql(base), base.location),
+    head === void 0 ? { bytes: 0 } : runner.estimate(steadyStateSql(head), head.location),
+    head?.incrementalQuery === void 0 || preOpsVariableIn(head.query, head.preOps ?? []) !== void 0 ? void 0 : runner.estimate(head.query, head.location)
+  ]);
+  if ("error" in baseResult) {
+    return { ...common, ...dryRunFailed("base", baseResult) };
+  }
+  if ("error" in headResult) {
+    const upstream = head === void 0 ? void 0 : readsNewTarget(steadyStateSql(head), change.target, newTargets);
+    if (change.kind === "added" && head?.incrementalQuery !== void 0 && steadyStateSql(head).includes(`\`${change.target}\``)) {
+      const firstRun = fullRefreshResult !== void 0 && "bytes" in fullRefreshResult ? ` Its first run, a full refresh, would scan up to ${formatBytes(fullRefreshResult.bytes)}.` : "";
+      return {
+        status: "unestimable",
+        ...common,
+        reason: `New incremental model: its incremental query reads its own table, which this pull request creates, so the monthly estimate waits until it exists.${firstRun}`,
+        errorKind: headResult.errorKind,
+        detail: headResult.error,
+        newUpstream: change.target
+      };
+    }
+    if (upstream !== void 0) {
+      return {
+        status: "unestimable",
+        ...common,
+        reason: `Reads \`${upstream}\`, which this pull request creates, so it can only be estimated once that table exists.`,
+        errorKind: headResult.errorKind,
+        detail: headResult.error,
+        newUpstream: upstream
+      };
+    }
+    if (headResult.errorKind === "partition-filter-required") {
+      return {
+        status: "unestimable",
+        ...common,
+        reason: `${PARTITION_FILTER_REQUIRED_REASON} BigQuery's message is in the job log.`,
+        errorKind: headResult.errorKind,
+        detail: headResult.error
+      };
+    }
+    return { ...common, ...dryRunFailed("head", headResult) };
+  }
+  const runsPerDay = runsPerDayFor(model, config);
+  const pricePerTib = pricePerTibFor(model, config);
+  const likelyCause = partitionFilterCause(baseResult, headResult);
+  return {
+    status: "estimated",
+    ...common,
+    baseBytes: baseResult.bytes,
+    headBytes: headResult.bytes,
+    runsPerDay,
+    pricePerTib,
+    monthlyDelta: monthlyDelta(baseResult.bytes, headResult.bytes, pricePerTib, runsPerDay),
+    ...likelyCause !== void 0 && { likelyCause },
+    ...fullRefreshResult !== void 0 && "bytes" in fullRefreshResult && { fullRefreshBytes: fullRefreshResult.bytes }
+  };
+}
+async function estimateChanges(changes, runner, config) {
+  const newTargets = new Set(changes.filter((c) => c.kind === "added").map((c) => c.target));
+  const estimates = await Promise.all(
+    changes.map((c) => estimateChange(c, runner, config, newTargets))
+  );
+  return buildReport(estimates, config);
+}
+function limitCannotApply(report) {
+  const estimated = report.estimates.filter((e2) => e2.status === "estimated");
+  return report.limitMonthly !== null && estimated.length > 0 && estimated.every((e2) => e2.pricePerTib === 0);
+}
+function buildReport(estimates, config) {
+  const totalMonthlyDelta = estimates.reduce(
+    (sum, e2) => e2.status === "estimated" ? sum + e2.monthlyDelta : sum,
+    0
+  );
+  return {
+    estimates,
+    totalMonthlyDelta,
+    pricePerTib: config.pricePerTib,
+    ...config.pricePerTibByLocation !== void 0 && {
+      pricePerTibByLocation: config.pricePerTibByLocation
+    },
+    limitMonthly: config.limitMonthly,
+    overLimit: exceedsLimit(totalMonthlyDelta, config.limitMonthly)
+  };
 }
 
 // ../core/src/limit-concurrency.ts

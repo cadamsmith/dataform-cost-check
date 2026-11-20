@@ -85,9 +85,9 @@ reports "not estimated" with a reason.
   Estimate the incremental one as steady state (`core.steadyStateSql`); mention the
   full-refresh estimate separately. The full-refresh query of the head version gets its own dry
   run (`Estimate.fullRefreshBytes`), shown as a note and never added to the monthly figure.
-  If only that dry run fails, the note is left out and the estimate stands. Known gap: a
-  newly added incremental model's incremental query reads its own table, which does not
-  exist yet, so it is reported as not estimated.
+  If only that dry run fails, the note is left out and the estimate stands. A newly added incremental model's incremental query reads its own table, which does not
+  exist yet, so it gets no monthly estimate; the comment says so and gives its first run, the
+  full refresh, in bytes. It is left out of the "every dry run fails" count (#38).
 - **Pre-operations.** Incremental models often `DECLARE` a checkpoint in
   `pre_operations` and filter on it. A dry run of the query alone fails on the unknown
   name, and a dry run of pre-operations plus query counted 0 bytes for the filtered

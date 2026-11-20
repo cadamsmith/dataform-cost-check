@@ -115,7 +115,7 @@ export type Estimate =
       readonly fullRefreshBytes?: number;
     }
   | {
-      /** Deliberately not estimated, e.g. views or assertions. */
+      /** Deliberately not estimated, e.g. views or custom operations. */
       readonly status: "skipped";
       readonly target: string;
       readonly name: string;

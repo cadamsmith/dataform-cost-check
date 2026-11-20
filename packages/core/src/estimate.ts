@@ -65,7 +65,6 @@ export function partitionFilterCause(
 /** Why some model types are not estimated. See docs/design.md, "Hard cases". */
 const SKIP_REASONS: Partial<Record<Model["type"], string>> = {
   view: "Views cost nothing to create; the cost lands on whatever reads them.",
-  assertion: "Assertions are not estimated yet.",
   operations: "Custom operations are not estimated yet.",
 };
 

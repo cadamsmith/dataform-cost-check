@@ -1,0 +1,7 @@
+{
+  "warehouse": "bigquery",
+  "defaultDatabase": "cost-check-sample",
+  "defaultSchema": "analytics",
+  "assertionSchema": "analytics_assertions",
+  "defaultLocation": "US"
+}

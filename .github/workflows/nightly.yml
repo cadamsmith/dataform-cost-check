@@ -1,0 +1,146 @@
+name: Nightly
+
+# Catches drift we do not control: new Dataform CLI releases (whose output the adapter
+# parses) and BigQuery's live API. Dry runs are free.
+on:
+  schedule:
+    - cron: "23 4 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  cli-canary:
+    name: Dataform CLI ${{ matrix.cli }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        # The version we build against, and whatever 3.x is newest tonight.
+        cli: ["3.0.61", "3"]
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Install
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+
+      # Deliberately unpinned: the point is to try the newest CLI before users do.
+      - name: Install Dataform CLI ${{ matrix.cli }}
+        env:
+          CLI_VERSION: ${{ matrix.cli }}
+        run: npm install --prefix "$RUNNER_TEMP/cli" "@dataform/cli@$CLI_VERSION" # zizmor: ignore[adhoc-packages]
+
+      - name: Compile and parse the sample project with it
+        run: |
+          version=$(node -p "require('$RUNNER_TEMP/cli/node_modules/@dataform/cli/package.json').version")
+          echo "Dataform CLI $version"
+          # The 3.x CLI needs a core with the same major.minor.
+          cp -R fixtures/sample-project "$RUNNER_TEMP/sample"
+          sed -i "s/^dataformCoreVersion: .*/dataformCoreVersion: $version/" "$RUNNER_TEMP/sample/workflow_settings.yaml"
+          export DATAFORM_SAMPLE_PROJECT="$RUNNER_TEMP/sample"
+          export PATH="$RUNNER_TEMP/cli/node_modules/.bin:$PATH"
+          node_modules/.bin/vitest run packages/dataform
+
+  cli-v2:
+    name: Dataform CLI 2.x
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Install
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+          npm ci --prefix fixtures/v2-project
+
+      # The 2.x CLI is not a dependency of this repository; only this job uses it.
+      - name: Install Dataform CLI 2.9.0
+        run: npm install --prefix "$RUNNER_TEMP/cli2" @dataform/cli@2.9.0 # zizmor: ignore[adhoc-packages]
+
+      - name: Compile and parse a dataform.json project
+        run: DATAFORM_V2_CLI="$RUNNER_TEMP/cli2/node_modules/.bin/dataform" node_modules/.bin/vitest run packages/dataform/test/compile.test.ts
+
+  live:
+    name: Live run against BigQuery
+    # Needs keyless sign-in for this repository (repository variables GCP_PROJECT,
+    # GCP_WIF_PROVIDER, GCP_SERVICE_ACCOUNT). Skipped until they are set.
+    if: ${{ vars.GCP_WIF_PROVIDER != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Install and build
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Install the Dataform CLI
+        run: npm install -g @dataform/cli@3.0.61 # zizmor: ignore[adhoc-packages]
+
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Run the partition-filter demo with a $1 limit
+        env:
+          GCP_PROJECT: ${{ vars.GCP_PROJECT }}
+        run: |
+          git config --global user.name nightly
+          git config --global user.email nightly@example.com
+          examples/trends-demo/run.sh --project "$GCP_PROJECT" --limit 1 | tee "$RUNNER_TEMP/out.txt"
+          # The demo drops a partition filter on a public table: the estimate must go over
+          # the limit, name the cause, and fail the check.
+          grep -q 'Over the \$1.00 limit' "$RUNNER_TEMP/out.txt"
+          grep -q 'likely cause: a filter on the partitioned table' "$RUNNER_TEMP/out.txt"
+          grep -q 'Check exit code: 1' "$RUNNER_TEMP/out.txt"
+
+  report:
+    name: Open an issue when the nightly fails
+    needs: [cli-canary, cli-v2, live]
+    if: ${{ failure() && github.event_name == 'schedule' }}
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --label nightly --state open --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "Failed again: $RUN_URL"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --label nightly --title "Nightly run failed" --body "The nightly CLI canary or live run failed: $RUN_URL"
+          fi

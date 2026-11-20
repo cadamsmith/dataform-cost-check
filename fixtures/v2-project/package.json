@@ -1,0 +1,7 @@
+{
+  "name": "cost-check-v2-fixture",
+  "private": true,
+  "dependencies": {
+    "@dataform/core": "2.9.0"
+  }
+}

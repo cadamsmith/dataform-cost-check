@@ -109,6 +109,7 @@ limit_monthly: 100 # fail the check above this
 default_runs_per_day: 1
 runs_per_day: # overrides by Dataform tag or model name
   hourly: 24
+history: false # opt-in: last run per changed model, see Permissions
 ```
 
 ## Permissions
@@ -120,6 +121,13 @@ through Workload Identity Federation. Grant it only:
 | -------------------------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | BigQuery Job User (`roles/bigquery.jobUser`)       | The project the dry runs run in (`project-id`) | `bigquery.jobs.create`, to start dry-run jobs                                                   |
 | BigQuery Data Viewer (`roles/bigquery.dataViewer`) | Each dataset your models read (or the project) | BigQuery checks read access on every table a dry run references, as it would for the real query |
+
+**Optional, for refresh history** (`history: true` in the config): BigQuery Resource Viewer
+(`roles/bigquery.resourceViewer`) on the project Dataform runs in, for
+`bigquery.jobs.listAll`. The action then reads the free job records (`jobs.list`) and shows
+each changed model's last run: when, how long, and slot-hours, which is what slot-based
+(Editions) pricing charges for. It is history, never a forecast. Without the role, the
+comment says history is unavailable and the check carries on.
 
 A dry run is free and reads no data: BigQuery only plans the query and reports the bytes it
 would scan. The action never runs a billable query and needs no write access. Data Viewer also covers the table metadata the action reads to tell which tables are

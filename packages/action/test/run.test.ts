@@ -45,6 +45,30 @@ describe("runCheck", () => {
   });
 });
 
+describe("runCheck history", () => {
+  const deps = (history: boolean | undefined, calls: string[][]) => ({
+    config: { ...DEFAULT_CONFIG, ...(history !== undefined && { history }) },
+    loadModels: (side: "base" | "head") => Promise.resolve(side === "base" ? [base] : [head]),
+    runner: new FakeDryRunner([
+      [base.query, { bytes: 1 }],
+      [head.query, { bytes: 2 }],
+    ]),
+    readHistory: (targets: readonly string[]) => {
+      calls.push([...targets]);
+      return Promise.resolve({ status: "ok" as const, days: 7, runs: {} });
+    },
+  });
+
+  it("reads history only when the config turns it on", async () => {
+    const calls: string[][] = [];
+    expect((await runCheck(deps(undefined, calls))).report.history).toBeUndefined();
+    expect(calls).toEqual([]);
+    const on = await runCheck(deps(true, calls));
+    expect(calls).toEqual([[base.target]]);
+    expect(on.comment).toContain("No run of the changed models in the last 7 days.");
+  });
+});
+
 describe("dryRunFailure", () => {
   const common = { target: "p.d.m", kind: "modified", type: "table" } as const;
   const estimated = {

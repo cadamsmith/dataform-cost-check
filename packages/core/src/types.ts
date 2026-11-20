@@ -178,7 +178,32 @@ export interface Config {
   readonly defaultRunsPerDay: number;
   /** Overrides keyed by model name or Dataform tag. */
   readonly runsPerDay: Readonly<Record<string, number>>;
+  /**
+   * Opt-in: show each changed model's last run from BigQuery's job records. Needs
+   * `bigquery.jobs.listAll`; never a billed query.
+   */
+  readonly history?: boolean;
 }
+
+/** One past run of a table, from BigQuery's job records. History, never a forecast. */
+export interface RefreshRun {
+  /** When the run finished, ISO 8601. */
+  readonly endedAt: string;
+  readonly durationMs: number;
+  /** Slot time used; for slot-based (Editions) pricing, this is what is paid for. */
+  readonly slotMs: number;
+}
+
+/** Last runs of the changed models, when the team opted in. */
+export type RefreshHistory =
+  | {
+      readonly status: "ok";
+      /** How many days back the job records were read. */
+      readonly days: number;
+      /** By target, `project.dataset.table`. */
+      readonly runs: Readonly<Record<string, RefreshRun>>;
+    }
+  | { readonly status: "unavailable"; readonly reason: string };
 
 /** Everything the PR comment needs. */
 export interface Report {
@@ -189,4 +214,6 @@ export interface Report {
   readonly pricePerTibByLocation?: Readonly<Record<string, number>>;
   readonly limitMonthly: number | null;
   readonly overLimit: boolean;
+  /** Present only when refresh history is turned on. */
+  readonly history?: RefreshHistory;
 }

@@ -231,6 +231,49 @@ describe("renderComment at 0 per TiB", () => {
   });
 });
 
+describe("refresh history", () => {
+  it("shows last runs as labelled history with slot-hours", () => {
+    const body = renderComment(
+      report({
+        estimates: [ordersDaily, customers],
+        totalMonthlyDelta: 6750.92,
+        history: {
+          status: "ok",
+          days: 7,
+          runs: {
+            [ordersDaily.target]: {
+              endedAt: "2026-11-20T19:58:12.000Z",
+              durationMs: 95_000,
+              slotMs: 7_200_000,
+            },
+          },
+        },
+      }),
+    );
+    expect(body).toContain("**Last refresh** (history from BigQuery job records, not a forecast)");
+    expect(body).toContain("| `orders_daily` | 2026-11-20 19:58 UTC | 1.6 min | 2.000 |");
+    expect(body).not.toContain("| `customers` | 2026");
+  });
+
+  it("says why history is missing, and when no run was found", () => {
+    const off = renderComment(
+      report({
+        estimates: [customers],
+        history: { status: "unavailable", reason: "no permission" },
+      }),
+    );
+    expect(off).toContain("Refresh history is turned on, but no permission.");
+    const none = renderComment(
+      report({ estimates: [customers], history: { status: "ok", days: 7, runs: {} } }),
+    );
+    expect(none).toContain("No run of the changed models in the last 7 days.");
+  });
+
+  it("adds nothing when history is off", () => {
+    expect(renderComment(report({ estimates: [customers] }))).not.toContain("Last refresh");
+  });
+});
+
 describe("unique-key incremental models", () => {
   it("says the MERGE's read of the existing table is not included", () => {
     const merged: Estimate = {

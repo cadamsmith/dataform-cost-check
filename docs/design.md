@@ -39,7 +39,12 @@ its scope, how the check works, and the hard cases it must handle.
   when the team grants job-listing access (`bigquery.jobs.listAll`), read from the free
   `jobs.list` API, never from a billed `INFORMATION_SCHEMA` query. For teams on slot-based
   (Editions) pricing it includes slot-hours, labelled as history and never as dollars;
-  Editions dollars stay in the paid tier. Decided 2026-11-20.
+  Editions dollars stay in the paid tier. Decided 2026-11-20. Built the same day
+  (`bigquery.readRefreshHistory`): newest successful job per table over 7 days, matched by
+  the job's DDL or destination table, or, for a SCRIPT (an incremental with pre-operations),
+  by its own `INSERT INTO` / `MERGE` / `CREATE OR REPLACE TABLE` target, matched in memory
+  and never shown. Child jobs cannot be listed together with `allUsers`, which is why the
+  script's SQL is matched. Checked live against a real Dataform run.
 
 ### Paid tier (not in this repository; do not build here)
 

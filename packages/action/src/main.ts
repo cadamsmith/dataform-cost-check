@@ -1,7 +1,11 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import * as core from "@actions/core";
-import { BigQueryDryRunner } from "@dataform-cost-check/bigquery";
+import {
+  applicationDefaultToken,
+  BigQueryDryRunner,
+  readRefreshHistory,
+} from "@dataform-cost-check/bigquery";
 import {
   commentMarker,
   DEFAULT_CONFIG,
@@ -80,7 +84,13 @@ async function main(): Promise<void> {
     loadModels: load,
     projectDir,
     runner: limitConcurrency(new BigQueryDryRunner({ projectId }), MAX_CONCURRENT_DRY_RUNS),
+    // Opt-in (`history: true`): job records of the dry-run project, where Dataform runs.
+    readHistory: (targets) =>
+      readRefreshHistory(targets, { projectId, getAccessToken: applicationDefaultToken() }),
   });
+  if (report.history?.status === "unavailable") {
+    core.warning(`Refresh history is turned on, but ${report.history.reason}.`);
+  }
 
   core.info(full);
   // Plain log lines, not warnings: annotations show up on the pull request.

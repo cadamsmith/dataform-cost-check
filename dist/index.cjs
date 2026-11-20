@@ -40255,7 +40255,7 @@ var require_schema = __commonJS({
     var _null = require_null();
     var seq = require_seq();
     var string = require_string();
-    var bool = require_bool();
+    var bool2 = require_bool();
     var float = require_float();
     var int = require_int();
     var schema = [
@@ -40263,7 +40263,7 @@ var require_schema = __commonJS({
       seq.seq,
       string.string,
       _null.nullTag,
-      bool.boolTag,
+      bool2.boolTag,
       int.intOct,
       int.int,
       int.intHex,
@@ -40910,7 +40910,7 @@ var require_schema3 = __commonJS({
     var seq = require_seq();
     var string = require_string();
     var binary = require_binary();
-    var bool = require_bool2();
+    var bool2 = require_bool2();
     var float = require_float2();
     var int = require_int2();
     var merge = require_merge();
@@ -40923,8 +40923,8 @@ var require_schema3 = __commonJS({
       seq.seq,
       string.string,
       _null.nullTag,
-      bool.trueTag,
-      bool.falseTag,
+      bool2.trueTag,
+      bool2.falseTag,
       int.intBin,
       int.intOct,
       int.int,
@@ -40953,7 +40953,7 @@ var require_tags = __commonJS({
     var _null = require_null();
     var seq = require_seq();
     var string = require_string();
-    var bool = require_bool();
+    var bool2 = require_bool();
     var float = require_float();
     var int = require_int();
     var schema = require_schema();
@@ -40974,7 +40974,7 @@ var require_tags = __commonJS({
     ]);
     var tagsByName = {
       binary: binary.binary,
-      bool: bool.boolTag,
+      bool: bool2.boolTag,
       float: float.float,
       floatExp: float.floatExp,
       floatNaN: float.floatNaN,
@@ -45626,8 +45626,78 @@ function info(message) {
 
 // ../bigquery/src/index.ts
 var import_google_auth_library = __toESM(require_src5(), 1);
-var BIGQUERY_SCOPE = "https://www.googleapis.com/auth/bigquery";
+
+// ../bigquery/src/history.ts
 var API_ROOT = "https://bigquery.googleapis.com/bigquery/v2";
+function tableName(ref) {
+  if (!ref?.projectId || !ref.datasetId || !ref.tableId) return void 0;
+  if (ref.datasetId.startsWith("_")) return void 0;
+  return `${ref.projectId}.${ref.datasetId}.${ref.tableId}`;
+}
+function jobTarget(job, targets) {
+  const named = tableName(job.statistics?.query?.ddlTargetTable) ?? tableName(job.configuration?.query?.destinationTable);
+  if (named !== void 0) return targets.has(named) ? named : void 0;
+  const sql = job.configuration?.query?.query ?? "";
+  for (const target of targets) {
+    const quoted = `\`${target}\``.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const write = new RegExp(
+      `(INSERT\\s+INTO|MERGE(\\s+INTO)?|CREATE\\s+OR\\s+REPLACE\\s+TABLE|CREATE\\s+TABLE)\\s+${quoted}`,
+      "i"
+    );
+    if (write.test(sql)) return target;
+  }
+  return void 0;
+}
+async function readRefreshHistory(targets, options) {
+  const fetchImpl = options.fetch ?? fetch;
+  const wanted = new Set(targets);
+  const days = options.days ?? 7;
+  const runs = {};
+  const since = Date.now() - days * 24 * 60 * 60 * 1e3;
+  let pageToken;
+  for (let page = 0; page < (options.maxPages ?? 5) && wanted.size > 0; page++) {
+    const params = new URLSearchParams({
+      allUsers: "true",
+      projection: "full",
+      stateFilter: "done",
+      maxResults: "1000",
+      minCreationTime: String(since),
+      ...pageToken !== void 0 && { pageToken }
+    });
+    const response = await fetchImpl(
+      `${API_ROOT}/projects/${encodeURIComponent(options.projectId)}/jobs?${params.toString()}`,
+      { headers: { authorization: `Bearer ${await options.getAccessToken()}` } }
+    );
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return {
+        status: "unavailable",
+        reason: response.status === 403 ? "the service account cannot list job history (needs bigquery.jobs.listAll, e.g. BigQuery Resource Viewer)" : `job history could not be read (HTTP ${String(response.status)})`
+      };
+    }
+    for (const job of body.jobs ?? []) {
+      if (job.status?.errorResult !== void 0) continue;
+      const target = jobTarget(job, wanted);
+      if (target === void 0) continue;
+      const start = Number(job.statistics?.startTime);
+      const end = Number(job.statistics?.endTime);
+      if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+      runs[target] = {
+        endedAt: new Date(end).toISOString(),
+        durationMs: end - start,
+        slotMs: Number(job.statistics?.totalSlotMs ?? 0)
+      };
+      wanted.delete(target);
+    }
+    pageToken = body.nextPageToken;
+    if (pageToken === void 0) break;
+  }
+  return { status: "ok", days, runs };
+}
+
+// ../bigquery/src/index.ts
+var BIGQUERY_SCOPE = "https://www.googleapis.com/auth/bigquery";
+var API_ROOT2 = "https://bigquery.googleapis.com/bigquery/v2";
 function classifyError(status, error2) {
   const reasons = [...error2?.errors ?? [], ...error2?.details ?? []].map((e2) => e2.reason);
   if (reasons.includes("accessNotConfigured") || reasons.includes("SERVICE_DISABLED")) {
@@ -45671,7 +45741,7 @@ var BigQueryDryRunner = class {
       }
     };
     const response = await this.#fetch(
-      `${API_ROOT}/projects/${encodeURIComponent(this.#projectId)}/jobs`,
+      `${API_ROOT2}/projects/${encodeURIComponent(this.#projectId)}/jobs`,
       {
         method: "POST",
         headers: {
@@ -45727,7 +45797,7 @@ var BigQueryDryRunner = class {
     try {
       const e2 = encodeURIComponent;
       const response = await this.#fetch(
-        `${API_ROOT}/projects/${e2(project)}/datasets/${e2(dataset)}/tables/${e2(table)}?fields=timePartitioning,rangePartitioning`,
+        `${API_ROOT2}/projects/${e2(project)}/datasets/${e2(dataset)}/tables/${e2(table)}?fields=timePartitioning,rangePartitioning`,
         { headers: { authorization: `Bearer ${await this.#getAccessToken()}` } }
       );
       if (!response.ok) return void 0;
@@ -45878,6 +45948,8 @@ function renderComment(report, {
     }
     if (notes.length > 0 && fits([""])) body.push(...notes, "");
   }
+  const historyLines = historySection(report);
+  if (historyLines.length > 0 && fits(historyLines)) body.push(...historyLines);
   let listed = 0;
   if (notEstimated.length > 0 && fits(["**Not estimated**", "", ""])) {
     const items = [];
@@ -45895,6 +45967,40 @@ function renderComment(report, {
     body.push(`\u2026and ${models}, left out to keep this comment short. ${fullReportAt}`, "");
   }
   return [...head, ...body, tail].join("\n") + "\n";
+}
+function historySection(report) {
+  const history = report.history;
+  if (history === void 0) return [];
+  const title = "**Last refresh** (history from BigQuery job records, not a forecast)";
+  if (history.status === "unavailable") {
+    return [title, "", `Refresh history is turned on, but ${history.reason}.`, ""];
+  }
+  const rows = report.estimates.flatMap((e2) => {
+    const run = history.runs[e2.target];
+    return run === void 0 ? [] : [
+      `| \`${e2.name}\` | ${run.endedAt.slice(0, 16).replace("T", " ")} UTC | ${formatDuration(run.durationMs)} | ${formatSlotHours(run.slotMs)} |`
+    ];
+  });
+  if (rows.length === 0) {
+    return [
+      title,
+      "",
+      `No run of the changed models in the last ${String(history.days)} days.`,
+      ""
+    ];
+  }
+  return [title, "", "| Model | Last run | Took | Slot-hours |", "|---|---|--:|--:|", ...rows, ""];
+}
+function formatDuration(ms) {
+  if (ms < 6e4) return `${(ms / 1e3).toFixed(1)} s`;
+  if (ms < 36e5) return `${(ms / 6e4).toFixed(1)} min`;
+  return `${(ms / 36e5).toFixed(1)} h`;
+}
+function formatSlotHours(slotMs) {
+  const hours = slotMs / 36e5;
+  if (hours === 0) return "0";
+  if (hours < 1e-3) return "<0.001";
+  return hours < 10 ? hours.toFixed(3) : hours.toFixed(1);
 }
 function byImpact(a, b) {
   return Math.abs(b.monthlyDelta) - Math.abs(a.monthlyDelta) || Math.abs(b.headBytes - b.baseBytes) - Math.abs(a.headBytes - a.baseBytes);
@@ -46348,7 +46454,8 @@ function parseConfig(text) {
     "price_per_tib_by_location",
     "limit_monthly",
     "default_runs_per_day",
-    "runs_per_day"
+    "runs_per_day",
+    "history"
   ]);
   for (const key of Object.keys(raw)) {
     if (!known.has(key)) throw new ConfigError(`unknown key "${key}"`);
@@ -46379,8 +46486,13 @@ function parseConfig(text) {
       raw.default_runs_per_day,
       DEFAULT_CONFIG.defaultRunsPerDay
     ),
-    runsPerDay
+    runsPerDay,
+    ...raw.history !== void 0 && { history: bool("history", raw.history) }
   };
+}
+function bool(key, value) {
+  if (typeof value !== "boolean") throw new ConfigError(`${key} must be true or false`);
+  return value;
 }
 var ConfigError = class extends Error {
   constructor(message) {
@@ -46468,7 +46580,8 @@ async function upsertStickyComment(options) {
 var SUMMARY_MAX_LENGTH = 9e5;
 async function runCheck(deps) {
   const [base, head] = await Promise.all([deps.loadModels("base"), deps.loadModels("head")]);
-  const report = await estimateChanges(diffModels(base, head), deps.runner, deps.config);
+  const estimated = await estimateChanges(diffModels(base, head), deps.runner, deps.config);
+  const report = deps.config.history === true && deps.readHistory !== void 0 && estimated.estimates.length > 0 ? { ...estimated, history: await deps.readHistory(estimated.estimates.map((e2) => e2.target)) } : estimated;
   const projectDir = deps.projectDir ?? ".";
   return {
     report,
@@ -46546,8 +46659,13 @@ async function main() {
     config,
     loadModels: load,
     projectDir,
-    runner: limitConcurrency(new BigQueryDryRunner({ projectId }), MAX_CONCURRENT_DRY_RUNS)
+    runner: limitConcurrency(new BigQueryDryRunner({ projectId }), MAX_CONCURRENT_DRY_RUNS),
+    // Opt-in (`history: true`): job records of the dry-run project, where Dataform runs.
+    readHistory: (targets) => readRefreshHistory(targets, { projectId, getAccessToken: applicationDefaultToken() })
   });
+  if (report.history?.status === "unavailable") {
+    warning(`Refresh history is turned on, but ${report.history.reason}.`);
+  }
   info(full);
   const details = failureDetails(report);
   if (details.length > 0) {

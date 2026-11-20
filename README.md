@@ -52,6 +52,9 @@ third-party service, and no one else holds your credentials.
 
 ## Usage
 
+**New here? Follow [Try it on your project](docs/getting-started.md)**: Google Cloud setup,
+the workflow and the config, step by step, with troubleshooting.
+
 ```yaml
 # .github/workflows/cost-check.yml
 on: pull_request # never pull_request_target

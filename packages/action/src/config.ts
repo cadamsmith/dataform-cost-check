@@ -1,6 +1,31 @@
+import { existsSync, readFileSync } from "node:fs";
 import { DEFAULT_CONFIG } from "@dataform-cost-check/core";
 import type { Config } from "@dataform-cost-check/core";
 import { parse } from "yaml";
+
+/** The `config-path` input's default in action.yml. */
+export const DEFAULT_CONFIG_PATH = "dataform-cost-check.yml";
+
+/**
+ * Reads the config file. A missing file at the default path means "use the defaults"
+ * (`found: false`). A missing file at any other path was set on purpose, so it is an error.
+ */
+export function loadConfig(
+  path: string,
+  fs: { existsSync: (p: string) => boolean; readFileSync: (p: string, e: "utf8") => string } = {
+    existsSync,
+    readFileSync,
+  },
+): { config: Config; found: boolean } {
+  if (fs.existsSync(path))
+    return { config: parseConfig(fs.readFileSync(path, "utf8")), found: true };
+  if (path !== DEFAULT_CONFIG_PATH) {
+    throw new Error(
+      `config-path is set to ${path}, but there is no such file (paths are relative to the repository root).`,
+    );
+  }
+  return { config: DEFAULT_CONFIG, found: false };
+}
 
 /** Parse and validate `dataform-cost-check.yml`. Missing keys fall back to defaults. */
 export function parseConfig(text: string): Config {

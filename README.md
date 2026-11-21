@@ -102,7 +102,10 @@ overrides (another project, a schema suffix, variables), set the same values in 
 above. Otherwise the check compiles your development settings, and dry runs may read
 datasets that do not exist or use the wrong variable values.
 
-Configuration, in `dataform-cost-check.yml` (see [`dataform-cost-check.example.yml`](dataform-cost-check.example.yml)):
+Configuration, in `dataform-cost-check.yml` (see [`dataform-cost-check.example.yml`](dataform-cost-check.example.yml)).
+Without the file, every model is assumed to run once a day, no limit applies, and the comment
+says so. A `config-path` other than the default must point to a file that exists, or the check
+fails:
 
 ```yaml
 # price_per_tib: 6.25 # optional: one USD price everywhere (default: Google's list price per location)

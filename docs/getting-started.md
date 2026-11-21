@@ -125,7 +125,8 @@ runs_per_day: # how often models run, by Dataform tag or model name
 ```
 
 Runs per day come from this file, not from your Dataform schedules. Set them to match your
-workflow configs, or the monthly figures are off by the same factor.
+workflow configs, or the monthly figures are off by the same factor. Without the file, every
+model is assumed to run once a day, no limit applies, and the comment says so.
 
 ## 5. Your first comment
 
@@ -158,6 +159,8 @@ partition filter that a table requires, or when no changed model could be estima
 | `no report for pull requests from forks`                                                                           | Expected: forks get no secrets or sign-in, so the check skips them and passes.                           |
 | Dry runs fail only from GitHub, with a VPC Service Controls message                                                | Allow the service account through the perimeter, or use a self-hosted runner inside it (see the README). |
 | `Refresh history is turned on, but the service account cannot list job history …`                                  | Grant BigQuery Resource Viewer, or set `history: false`.                                                 |
+| `No dataform-cost-check.yml found, so every model is assumed to run once a day …`                                  | Add the file at the repository root, not under `project-dir`.                                            |
+| `config-path is set to …, but there is no such file`                                                               | Fix the path: it is relative to the repository root.                                                     |
 
 ## Removing it
 

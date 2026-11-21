@@ -344,6 +344,17 @@ describe("commentMarker and monorepos", () => {
     expect(renderComment(report({}))).toContain(
       "Runs per day come from `dataform-cost-check.yml`, not from your schedules.",
     );
+    expect(renderComment(report({}), { configPath: "ci/cost.yml" })).toContain(
+      "Runs per day come from `ci/cost.yml`, not from your schedules.",
+    );
+  });
+
+  it("says when no config file was found and the defaults were used", () => {
+    const body = renderComment(report({}), { configFound: false });
+    expect(body).toContain(
+      "No `dataform-cost-check.yml` found, so every model is assumed to run once a day and no limit applies.",
+    );
+    expect(body).not.toContain("Runs per day come from");
   });
 });
 

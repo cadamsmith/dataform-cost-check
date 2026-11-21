@@ -59,6 +59,11 @@ the workflow and the config, step by step, with troubleshooting.
 # .github/workflows/cost-check.yml
 on: pull_request # never pull_request_target
 
+# A newer push cancels the older run, so it can't overwrite the newer estimate.
+concurrency:
+  group: dataform-cost-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   estimate:
     runs-on: ubuntu-latest
@@ -178,7 +183,9 @@ with Dataform 3.x (CLI and core 3.0.61) and with Dataform 2.x projects (`datafor
 CLI and core 2.9.0, compile only; install the 2.x CLI in your workflow). The compile
 override inputs are untested on 2.x.
 In a repository with several Dataform projects, run one job per `project-dir`: each keeps its
-own comment. See [docs/design.md](docs/design.md) for how each case is handled.
+own comment. If those jobs set their own `concurrency` group, or live in separate workflows, put
+the directory in the group name, or they cancel each other. See [docs/design.md](docs/design.md)
+for how each case is handled.
 
 ## Security
 

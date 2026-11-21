@@ -67,6 +67,12 @@ Add `.github/workflows/cost-check.yml`, filling in the two lines from step 2:
 name: Cost check
 on: pull_request # never pull_request_target
 
+# A newer push cancels the run still going for the old one, so it can't overwrite the newer
+# estimate. Dry runs are free, so nothing is lost.
+concurrency:
+  group: dataform-cost-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   estimate:
     runs-on: ubuntu-latest
@@ -91,19 +97,22 @@ jobs:
       # Only if your project has a package.json that pins @dataform/core:
       - run: npm ci
       # Pin a release's full commit SHA (see the release page), not a tag.
-      - uses: cadamsmith/dataform-cost-check@9b6a7f39e27585ef23455a0ad6d3fe3b76980a1c # v0.3.0
+      - uses: cadamsmith/dataform-cost-check@914a5b1497a904948a3af6f278b549e830f5d4d6 # v0.3.1
 ```
 
 If the Dataform project is not at the repository root, add `project-dir: path/to/project` under
 the action's `with:`. A repository with several Dataform projects runs one job per directory,
-and each keeps its own comment.
+and each keeps its own comment. If those jobs set their own `concurrency` group, or live in
+separate workflows, put the directory in the group name, for example
+`dataform-cost-check-${{ github.event.pull_request.number }}-path/to/project`, or they cancel
+each other.
 
 **If production runs from a release config** with overrides (another Google Cloud project, a
 schema suffix, compilation variables), pass the same values so the check compiles what
 production runs:
 
 ```yaml
-- uses: cadamsmith/dataform-cost-check@9b6a7f39e27585ef23455a0ad6d3fe3b76980a1c # v0.3.0
+- uses: cadamsmith/dataform-cost-check@914a5b1497a904948a3af6f278b549e830f5d4d6 # v0.3.1
   with:
     default-database: my-prod-project
     schema-suffix: ""

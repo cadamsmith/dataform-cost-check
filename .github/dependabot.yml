@@ -14,6 +14,14 @@ updates:
       runtime-dependencies:
         dependency-type: production
     open-pull-requests-limit: 5
+    ignore:
+      # typescript-eslint does not support TypeScript 7 (the native port) yet. Lift this
+      # once it does.
+      - dependency-name: typescript
+        versions: [">=7"]
+      # The Action runs on Node 24 (action.yml, esbuild target), so the types stay on 24.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /

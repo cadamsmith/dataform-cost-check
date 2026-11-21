@@ -2,7 +2,8 @@ name: Release
 
 on:
   push:
-    tags: ["v*"]
+    # Full versions only, so the moving major tag (v0) never triggers a release.
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
 
 permissions:
   contents: write
@@ -52,12 +53,13 @@ jobs:
         run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes --title "$GITHUB_REF_NAME"
 
       # For users who follow a major version instead of pinning a SHA: v0 -> this release.
+      # git/ref (singular) matches exactly; git/refs/tags/v0 would prefix-match v0.1.0 and so on.
       - name: Move the major version tag
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           major="${GITHUB_REF_NAME%%.*}"
-          if gh api "repos/$GITHUB_REPOSITORY/git/refs/tags/$major" >/dev/null 2>&1; then
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$major" >/dev/null 2>&1; then
             gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/$major" -f sha="$GITHUB_SHA" -F force=true
           else
             gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$major" -f sha="$GITHUB_SHA"

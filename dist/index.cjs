@@ -46873,7 +46873,7 @@ async function main() {
     );
   }
   const baseRef = await resolveBaseRef(getInput("base-ref"), process.env.GITHUB_EVENT_PATH);
-  info(`Dataform Cost Check 0.3.0 (alpha). Base: ${baseRef}. Dry runs in: ${projectId}.`);
+  info(`Dataform Cost Check 0.3.1 (alpha). Base: ${baseRef}. Dry runs in: ${projectId}.`);
   const config = (0, import_node_fs4.existsSync)(configPath) ? parseConfig((0, import_node_fs4.readFileSync)(configPath, "utf8")) : DEFAULT_CONFIG;
   if (!(0, import_node_fs4.existsSync)(configPath)) info(`No ${configPath} found; using defaults.`);
   const overrides = {

@@ -1,5 +1,10 @@
 import { readFileSync } from "node:fs";
-import { DEFAULT_CONFIG, FakeDryRunner, estimateChange } from "@dataform-cost-check/core";
+import {
+  DEFAULT_CONFIG,
+  FakeDryRunner,
+  estimateChange,
+  runsPerDayFor,
+} from "@dataform-cost-check/core";
 import type { Model } from "@dataform-cost-check/core";
 import { describe, expect, it } from "vitest";
 import { DataformCompilationError, parseCliJson, parseCompileOutput } from "../src/index.ts";
@@ -86,6 +91,27 @@ describe("parseCompileOutput", () => {
     expect(() => parseCompileOutput(input)).toThrow(
       'definitions/customers.sqlx: Unexpected property "location"',
     );
+  });
+
+  it("names a model as written in the project when a table prefix renames its target", () => {
+    const input = sampleWith((o) => {
+      const t = (o.tables as { name?: string; target: { name: string } }[]).find(
+        (x) => x.target.name === "orders_daily",
+      );
+      if (t === undefined) throw new Error("sample has no orders_daily");
+      t.target.name = "rel_orders_daily";
+    });
+    const daily = parseCompileOutput(input).find((m) => m.target.endsWith(".rel_orders_daily"));
+    expect(daily?.name).toBe("orders_daily");
+    const config = { ...DEFAULT_CONFIG, runsPerDay: { orders_daily: 24 } };
+    expect(daily && runsPerDayFor(daily, config)).toBe(24);
+  });
+
+  it("falls back to the target's name when there is no canonical target", () => {
+    const input = sampleWith((o) => {
+      for (const t of o.tables as { canonicalTarget?: unknown }[]) delete t.canonicalTarget;
+    });
+    expect(parseCompileOutput(input).map((m) => m.name)).toContain("orders_daily");
   });
 
   it("rejects output that is not a compile result", () => {

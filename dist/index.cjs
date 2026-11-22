@@ -46594,7 +46594,9 @@ function toModel(action, type, location, query) {
   }
   return {
     target: [database, schema, name].filter(Boolean).join("."),
-    name,
+    // The name as written in the project, so a `table-prefix` override does not stop
+    // `runs_per_day` entries from matching.
+    name: action.canonicalTarget?.name ?? name,
     type,
     query,
     ...action.incrementalQuery !== void 0 && { incrementalQuery: action.incrementalQuery },

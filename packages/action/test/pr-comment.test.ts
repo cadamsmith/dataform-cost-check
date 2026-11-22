@@ -107,6 +107,42 @@ describe("upsertStickyComment", () => {
     expect(JSON.parse(gh.calls.at(-1)?.body ?? "{}")).toEqual({ body: `${MARKER}\nnew` });
   });
 
+  it("posts nothing in update-only mode when there is no comment yet", async () => {
+    const gh = fakeGitHub([[{ id: 1, body: "unrelated" }]]);
+    const result = await upsertStickyComment({
+      token: "t",
+      pr,
+      body: `${MARKER}\nno models changed`,
+      marker: MARKER,
+      updateOnly: true,
+      fetch: gh.fetchFn,
+    });
+    expect(result.action).toBe("skipped");
+    expect(gh.calls.every((c) => c.method === "GET")).toBe(true);
+  });
+
+  it("still updates a comment left by an earlier push in update-only mode", async () => {
+    const gh = fakeGitHub([
+      [{ id: 500, body: `${MARKER}\n+$225.00 / month`, user: { type: "Bot" } }],
+    ]);
+    const result = await upsertStickyComment({
+      token: "t",
+      pr,
+      body: `${MARKER}\nno models changed`,
+      marker: MARKER,
+      updateOnly: true,
+      fetch: gh.fetchFn,
+    });
+    expect(result.action).toBe("updated");
+    expect(gh.calls.at(-1)).toMatchObject({
+      method: "PATCH",
+      url: "https://api.github.com/repos/acme/warehouse/issues/comments/500",
+    });
+    expect(JSON.parse(gh.calls.at(-1)?.body ?? "{}")).toEqual({
+      body: `${MARKER}\nno models changed`,
+    });
+  });
+
   it("throws with the status when GitHub refuses", async () => {
     const fetchFn = (() => Promise.resolve(new Response("", { status: 403 }))) as typeof fetch;
     await expect(

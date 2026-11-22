@@ -73,8 +73,10 @@ its scope, how the check works, and the hard cases it must handle.
 5. Price it: `delta_TiB x price_per_TiB x runs_per_day x 30`. (`core.monthlyDelta`)
    `runs_per_day` comes from an override for the model name, then the highest override
    among its tags, then `default_runs_per_day`.
-6. Post or update one sticky comment, found by a hidden marker. Exit non-zero if the total
-   exceeds `limit_monthly` (strictly greater; exactly at the limit passes).
+6. Post or update one sticky comment, found by a hidden marker. When no models changed, only
+   update an existing comment (so it never shows a stale estimate); don't create one. Exit
+   non-zero if the total exceeds `limit_monthly` (strictly greater; exactly at the limit
+   passes).
 
 ### Package boundaries
 

@@ -410,6 +410,15 @@ describe("runs per day that change", () => {
         estimates: [{ ...customers, kind: "modified", baseRunsPerDay: 1, runsPerDay: 24 }],
       }),
     );
-    expect(body).toContain("| `customers` | modified | 0 B → 5.00 GiB | 1 → 24 | +$0.92 |");
+    expect(body).toContain("| `customers` | modified | 0 B → 5.00 GiB | 1 → 24 / day | +$0.92 |");
+  });
+
+  it("names the unit on both sides when a change crosses into weekly", () => {
+    const body = renderComment(
+      report({
+        estimates: [{ ...customers, kind: "modified", baseRunsPerDay: 1, runsPerDay: 1 / 7 }],
+      }),
+    );
+    expect(body).toContain("| 1 / day → 1 / week |");
   });
 });

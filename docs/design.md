@@ -40,7 +40,8 @@ its scope, how the check works, and the hard cases it must handle.
   `jobs.list` API, never from a billed `INFORMATION_SCHEMA` query. For teams on slot-based
   (Editions) pricing it includes slot-hours, labelled as history and never as dollars;
   Editions dollars stay in the paid tier. Decided 2026-11-20. Built the same day
-  (`bigquery.readRefreshHistory`): newest successful job per table over 7 days, matched by
+  (`bigquery.readRefreshHistory`): newest successful job per table over twice the slowest cadence in the config (7 to 30
+  days, `core.historyDays`; 14 for weekly runs), matched by
   the job's DDL or destination table, or, for a SCRIPT (an incremental with pre-operations),
   by its own `INSERT INTO` / `MERGE` / `CREATE OR REPLACE TABLE` target, matched in memory
   and never shown. Child jobs cannot be listed together with `allUsers`, which is why the

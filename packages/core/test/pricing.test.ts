@@ -5,6 +5,8 @@ import {
   ON_DEMAND_PRICE_PER_TIB,
   bytesToTib,
   exceedsLimit,
+  formatRuns,
+  historyDays,
   monthlyCost,
   monthlyDelta,
   runsPerDayFor,
@@ -139,5 +141,29 @@ describe("built-in region prices", () => {
   it("lists every price as a positive number of dollars", () => {
     for (const price of Object.values(ON_DEMAND_PRICE_PER_TIB)) expect(price).toBeGreaterThan(0);
     expect(ON_DEMAND_PRICE_PER_TIB.US).toBe(6.25);
+  });
+});
+
+describe("formatRuns", () => {
+  it("says runs per day, weekly, or every few days", () => {
+    expect(formatRuns(24)).toBe("24 / day");
+    expect(formatRuns(1)).toBe("1 / day");
+    expect(formatRuns(1.5)).toBe("1.5 / day");
+    expect(formatRuns(0.142857)).toBe("1 / week");
+    expect(formatRuns(1 / 7)).toBe("1 / week");
+    expect(formatRuns(0.5)).toBe("every 2 days");
+    expect(formatRuns(1 / 30)).toBe("every 30 days");
+    expect(formatRuns(0.3)).toBe("0.3 / day");
+    expect(formatRuns(0)).toBe("0 / day");
+  });
+});
+
+describe("historyDays", () => {
+  it("searches twice the slowest cadence, between 7 and 30 days", () => {
+    expect(historyDays(DEFAULT_CONFIG)).toBe(7);
+    expect(historyDays({ ...DEFAULT_CONFIG, defaultRunsPerDay: 0.142857 })).toBe(14);
+    expect(historyDays({ ...DEFAULT_CONFIG, runsPerDay: { weekly: 1 / 7, hourly: 24 } })).toBe(14);
+    expect(historyDays({ ...DEFAULT_CONFIG, defaultRunsPerDay: 1 / 90 })).toBe(30);
+    expect(historyDays({ ...DEFAULT_CONFIG, defaultRunsPerDay: 0 })).toBe(7);
   });
 });

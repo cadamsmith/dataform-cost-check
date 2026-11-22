@@ -45651,7 +45651,7 @@ async function readRefreshHistory(targets, options) {
   const fetchImpl = options.fetch ?? fetch;
   const wanted = new Set(targets);
   const days = options.days ?? 7;
-  const runs = {};
+  const runs2 = {};
   const since = Date.now() - days * 24 * 60 * 60 * 1e3;
   let pageToken;
   let jobsRead = 0;
@@ -45684,7 +45684,7 @@ async function readRefreshHistory(targets, options) {
       const start = Number(job.statistics?.startTime);
       const end = Number(job.statistics?.endTime);
       if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
-      runs[target] = {
+      runs2[target] = {
         endedAt: new Date(end).toISOString(),
         durationMs: end - start,
         slotMs: Number(job.statistics?.totalSlotMs ?? 0)
@@ -45698,7 +45698,7 @@ async function readRefreshHistory(targets, options) {
     }
   }
   if (wanted.size === 0) complete = true;
-  return { status: "ok", days, project: options.projectId, jobsRead, complete, runs };
+  return { status: "ok", days, project: options.projectId, jobsRead, complete, runs: runs2 };
 }
 
 // ../bigquery/src/index.ts
@@ -45927,6 +45927,22 @@ function runsPerDayFor(model, config) {
   if (byTag.length > 0) return Math.max(...byTag);
   return config.defaultRunsPerDay;
 }
+function historyDays(config) {
+  const rates = [config.defaultRunsPerDay, ...Object.values(config.runsPerDay)].filter(
+    (r2) => r2 > 0
+  );
+  const slowest = rates.length === 0 ? 1 : Math.min(...rates);
+  return Math.min(30, Math.max(7, Math.ceil(2 / slowest - 1e-3)));
+}
+function formatRuns(runsPerDay) {
+  const short = (n) => String(Number(n.toFixed(2)));
+  if (runsPerDay >= 1 || runsPerDay === 0) return `${short(runsPerDay)} / day`;
+  const days = 1 / runsPerDay;
+  const whole = Math.round(days);
+  if (Math.abs(days - whole) < 0.01)
+    return whole === 7 ? "1 / week" : `every ${String(whole)} days`;
+  return `${short(runsPerDay)} / day`;
+}
 function exceedsLimit(totalMonthlyDelta, limitMonthly) {
   return limitMonthly !== null && totalMonthlyDelta > limitMonthly;
 }
@@ -46139,7 +46155,7 @@ function renderComment(report, {
   };
   const shown = [];
   const tableHeader = [
-    "| Model | Change | Scanned per run (before \u2192 after) | Runs / day | Monthly estimate |",
+    "| Model | Change | Scanned per run (before \u2192 after) | Runs | Monthly estimate |",
     "|---|---|---|--:|--:|"
   ];
   if (estimated.length > 0 && fits([...tableHeader, ""])) {
@@ -46221,7 +46237,13 @@ function byImpact(a, b) {
 }
 function row(e2) {
   const monthly = e2.pricePerTib === 0 ? "bytes only" : formatUsd(e2.monthlyDelta, { signed: true });
-  return `| \`${e2.name}\` | ${e2.kind} | ${formatBytes(e2.baseBytes)} \u2192 ${formatBytes(e2.headBytes)} | ${e2.baseRunsPerDay === void 0 ? "" : `${String(e2.baseRunsPerDay)} \u2192 `}${String(e2.runsPerDay)} | ${monthly} |`;
+  return `| \`${e2.name}\` | ${e2.kind} | ${formatBytes(e2.baseBytes)} \u2192 ${formatBytes(e2.headBytes)} | ${runs(e2)} | ${monthly} |`;
+}
+function runs(e2) {
+  const head = formatRuns(e2.runsPerDay);
+  if (e2.baseRunsPerDay === void 0) return head;
+  const base = formatRuns(e2.baseRunsPerDay);
+  return base.endsWith(" / day") && head.endsWith(" / day") ? `${base.slice(0, -" / day".length)} \u2192 ${head}` : `${base} \u2192 ${head}`;
 }
 function notesFor(e2) {
   return [
@@ -46272,10 +46294,10 @@ function footer(report, configPath, configFound) {
   const price = list === void 0 ? own : `Google's on-demand list price for each location as of ${list.asOf} (${Object.entries(
     list.byLocation
   ).map(([location, p]) => `${formatUsd(p)} per TiB in ${location}`).join(", ")}; otherwise ${own})`;
-  const runs = configFound ? `Runs per day come from \`${configPath}\`, not from your schedules.` : `No \`${configPath}\` found, so every model is assumed to run once a day and no limit applies.`;
+  const runs2 = configFound ? `Runs per day come from \`${configPath}\`, not from your schedules.` : `No \`${configPath}\` found, so every model is assumed to run once a day and no limit applies.`;
   return [
     `<sub>Estimates are upper bounds from BigQuery dry runs, priced at ${price}, `,
-    `with no free-tier deduction. ${runs} If this project uses slot-based (Editions) pricing, `,
+    `with no free-tier deduction. ${runs2} If this project uses slot-based (Editions) pricing, `,
     "bytes scanned do not map to dollars and these figures do not apply.</sub>"
   ].join("");
 }
@@ -46949,7 +46971,11 @@ async function main() {
     configFound,
     runner: limitConcurrency(new BigQueryDryRunner({ projectId }), MAX_CONCURRENT_DRY_RUNS),
     // Opt-in (`history: true`): job records of the dry-run project, where Dataform runs.
-    readHistory: (targets) => readRefreshHistory(targets, { projectId, getAccessToken: applicationDefaultToken() })
+    readHistory: (targets) => readRefreshHistory(targets, {
+      projectId,
+      getAccessToken: applicationDefaultToken(),
+      days: historyDays(config)
+    })
   });
   if (report.history?.status === "unavailable") {
     warning(`Refresh history is turned on, but ${report.history.reason}.`);

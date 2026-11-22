@@ -98,6 +98,34 @@ export function runsPerDayFor(model: Pick<Model, "name" | "tags">, config: Confi
   return config.defaultRunsPerDay;
 }
 
+/**
+ * How many days of job records to search for refresh history: twice the longest interval
+ * between runs in the config, so a weekly run that slips a few days is still found. At
+ * least 7 days, at most 30 (`jobs.list` pages are capped anyway).
+ */
+export function historyDays(config: Config): number {
+  const rates = [config.defaultRunsPerDay, ...Object.values(config.runsPerDay)].filter(
+    (r) => r > 0,
+  );
+  const slowest = rates.length === 0 ? 1 : Math.min(...rates);
+  return Math.min(30, Math.max(7, Math.ceil(2 / slowest - 0.001)));
+}
+
+/**
+ * Runs as a reader would say them: `24 / day`, `1 / week`, `every 3 days`. Fractions of a
+ * day that are not a whole number of days stay per day, e.g. `0.3 / day`.
+ */
+export function formatRuns(runsPerDay: number): string {
+  const short = (n: number) => String(Number(n.toFixed(2)));
+  if (runsPerDay >= 1 || runsPerDay === 0) return `${short(runsPerDay)} / day`;
+  const days = 1 / runsPerDay;
+  const whole = Math.round(days);
+  // 0.142857 is 7.000007 days: close enough to a week.
+  if (Math.abs(days - whole) < 0.01)
+    return whole === 7 ? "1 / week" : `every ${String(whole)} days`;
+  return `${short(runsPerDay)} / day`;
+}
+
 /** True when the total exceeds the limit. Exactly at the limit passes; no limit never fails. */
 export function exceedsLimit(totalMonthlyDelta: number, limitMonthly: number | null): boolean {
   return limitMonthly !== null && totalMonthlyDelta > limitMonthly;

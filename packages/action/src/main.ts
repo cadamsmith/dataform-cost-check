@@ -5,7 +5,12 @@ import {
   BigQueryDryRunner,
   readRefreshHistory,
 } from "@dataform-cost-check/bigquery";
-import { commentMarker, limitCannotApply, limitConcurrency } from "@dataform-cost-check/core";
+import {
+  commentMarker,
+  historyDays,
+  limitCannotApply,
+  limitConcurrency,
+} from "@dataform-cost-check/core";
 import type { Model } from "@dataform-cost-check/core";
 import { isDataformProject, loadModels } from "@dataform-cost-check/dataform";
 import { copyDependencies, resolveBaseRef, withBaseWorktree } from "./base-checkout.ts";
@@ -90,7 +95,11 @@ async function main(): Promise<void> {
     runner: limitConcurrency(new BigQueryDryRunner({ projectId }), MAX_CONCURRENT_DRY_RUNS),
     // Opt-in (`history: true`): job records of the dry-run project, where Dataform runs.
     readHistory: (targets) =>
-      readRefreshHistory(targets, { projectId, getAccessToken: applicationDefaultToken() }),
+      readRefreshHistory(targets, {
+        projectId,
+        getAccessToken: applicationDefaultToken(),
+        days: historyDays(config),
+      }),
   });
   if (report.history?.status === "unavailable") {
     core.warning(`Refresh history is turned on, but ${report.history.reason}.`);

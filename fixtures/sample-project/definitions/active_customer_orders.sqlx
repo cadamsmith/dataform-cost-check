@@ -1,0 +1,14 @@
+config {
+  type: "table",
+  description: "Orders from active customers, scoped through a temp table built in pre-operations."
+}
+
+pre_operations {
+  CREATE TEMP TABLE active_scope AS
+  SELECT customer_id FROM ${ref("customers")}
+  WHERE order_count > 1
+}
+
+SELECT o.order_date, o.customer_id
+FROM ${ref("orders")} o
+JOIN active_scope USING (customer_id)

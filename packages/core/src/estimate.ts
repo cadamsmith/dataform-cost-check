@@ -104,6 +104,34 @@ export function preOpsVariableIn(sql: string, preOps: readonly string[]): string
   return declared.find((name) => new RegExp(`\\b${name}\\b`, "i").test(sql));
 }
 
+/**
+ * The first temp table that `pre_operations` create and `sql` reads, if any. A temp table
+ * exists only inside the script Dataform runs, so a dry run of the query alone fails on
+ * the unknown name; such a query is not estimated.
+ */
+export function preOpsTempTableIn(sql: string, preOps: readonly string[]): string | undefined {
+  const created = preOps.flatMap((statement) =>
+    [
+      ...statement.matchAll(
+        /\bCREATE\s+(?:OR\s+REPLACE\s+)?TEMP(?:ORARY)?\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?`?([A-Za-z_]\w*)`?/gi,
+      ),
+    ].map((m) => m[1] ?? ""),
+  );
+  // Not after a dot: `proj.dataset.tenant_scope` is a real table, not the temp one.
+  return created.find((name) => new RegExp(`(?<![.\\w])\`?${name}\\b`, "i").test(sql));
+}
+
+/** Why pre-operations stop `sql` from being dry-run alone, if they do. */
+function preOpsBlocker(
+  sql: string,
+  preOps: readonly string[],
+): { preOpsVariable: string } | { preOpsTempTable: string } | undefined {
+  const variable = preOpsVariableIn(sql, preOps);
+  if (variable !== undefined) return { preOpsVariable: variable };
+  const table = preOpsTempTableIn(sql, preOps);
+  return table === undefined ? undefined : { preOpsTempTable: table };
+}
+
 function estimable(model: Model): Model | undefined {
   return SKIP_REASONS[model.type] === undefined ? model : undefined;
 }
@@ -146,13 +174,16 @@ export async function estimateChange(
 
   for (const side of [base, head]) {
     if (side === undefined) continue;
-    const variable = preOpsVariableIn(steadyStateSql(side), steadyStatePreOps(side));
-    if (variable !== undefined) {
+    const blocker = preOpsBlocker(steadyStateSql(side), steadyStatePreOps(side));
+    if (blocker !== undefined) {
       return {
         status: "unestimable",
         ...common,
-        reason: `Filters on \`${variable}\`, a variable set in pre_operations, which a dry run cannot size.`,
-        preOpsVariable: variable,
+        reason:
+          "preOpsVariable" in blocker
+            ? `Filters on \`${blocker.preOpsVariable}\`, a variable set in pre_operations, which a dry run cannot size.`
+            : `Reads \`${blocker.preOpsTempTable}\`, a temp table created in pre_operations, which a dry run of the query alone cannot see.`,
+        ...blocker,
       };
     }
   }
@@ -161,7 +192,7 @@ export async function estimateChange(
     base === undefined ? { bytes: 0 } : runner.estimate(steadyStateSql(base), base.location),
     head === undefined ? { bytes: 0 } : runner.estimate(steadyStateSql(head), head.location),
     head?.incrementalQuery === undefined ||
-    preOpsVariableIn(head.query, head.preOps ?? []) !== undefined
+    preOpsBlocker(head.query, head.preOps ?? []) !== undefined
       ? undefined
       : runner.estimate(head.query, head.location),
   ]);

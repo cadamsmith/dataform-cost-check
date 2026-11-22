@@ -76,7 +76,7 @@ count for each, and posts one sticky comment. A fuller example, with every secti
 - Last refresh duration (and slot-hours, for slot-based pricing) per table, shown as history
   when you opt in by granting job-listing access. Never a billed query, never a forecast.
 - Says plainly what it did not estimate, and why: a read of a table the same pull request
-  creates, a filter on a variable set in pre-operations, a view (it costs nothing until read)
+  creates, a filter on a variable or a read of a temp table set up in pre-operations, a view (it costs nothing until read)
 
 ## Usage
 

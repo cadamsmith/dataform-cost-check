@@ -25,6 +25,7 @@ describe("parseCompileOutput", () => {
   it("maps the sample project's tables, assertion and operation", () => {
     const models = parseCompileOutput(sample);
     expect(models.map((m) => [m.target, m.type])).toEqual([
+      ["cost-check-sample.analytics.active_customer_orders", "table"],
       ["cost-check-sample.analytics.customers", "table"],
       ["cost-check-sample.analytics.orders_by_customer", "incremental"],
       ["cost-check-sample.analytics.orders_daily", "incremental"],
@@ -73,7 +74,10 @@ describe("parseCompileOutput", () => {
 
   it("leaves out disabled actions", () => {
     const input = sampleWith((o) => {
-      (o.tables?.[0] as { disabled: boolean }).disabled = true;
+      const customers = (o.tables as { target: { name: string }; disabled: boolean }[]).find(
+        (t) => t.target.name === "customers",
+      );
+      if (customers) customers.disabled = true;
     });
     expect(parseCompileOutput(input).map((m) => m.name)).not.toContain("customers");
   });
@@ -243,5 +247,21 @@ describe("Dataform 2.x", () => {
 
   it("still rejects output that is not JSON at all", () => {
     expect(() => parseCliJson("Dataform encountered an error")).toThrow();
+  });
+});
+
+describe("a pre_operations temp table (SQLX)", () => {
+  it("keeps the pre-operations and reports the model as not estimated, without a dry run", async () => {
+    const model = parseCompileOutput(sample).find((m) => m.name === "active_customer_orders");
+    if (model === undefined) throw new Error("active_customer_orders missing from the sample");
+    expect(model.preOps?.[0]).toContain("CREATE TEMP TABLE active_scope");
+    const runner = new FakeDryRunner();
+    const estimate = await estimateChange(
+      { kind: "added", target: model.target, head: model },
+      runner,
+      DEFAULT_CONFIG,
+    );
+    expect(estimate).toMatchObject({ status: "unestimable", preOpsTempTable: "active_scope" });
+    expect(runner.calls).toEqual([]);
   });
 });

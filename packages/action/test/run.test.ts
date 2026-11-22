@@ -156,6 +156,12 @@ describe("dryRunFailure", () => {
     expect(dryRunFailure(report([preOps, failed]))).toContain("1 tried");
   });
 
+  it("leaves models reading a pre_operations temp table out of the count", () => {
+    const temp = { ...failed, name: "scoped", preOpsTempTable: "active_scope" } as const;
+    expect(dryRunFailure(report([temp]))).toBeUndefined();
+    expect(dryRunFailure(report([temp, failed]))).toContain("1 tried");
+  });
+
   it("passes when nothing needed a dry run", () => {
     expect(dryRunFailure(report([]))).toBeUndefined();
     expect(dryRunFailure(report([skipped]))).toBeUndefined();

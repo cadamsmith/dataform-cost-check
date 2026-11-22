@@ -330,6 +330,20 @@ describe("commentMarker and monorepos", () => {
     expect(commentMarker("./")).toBe(COMMENT_MARKER);
   });
 
+  it("never puts -- inside the marker, whatever the directory name", () => {
+    expect(commentMarker("a--b")).toBe("<!-- dataform-cost-check:a-b -->");
+    expect(commentMarker("a---b")).toBe("<!-- dataform-cost-check:a-b -->");
+  });
+
+  it("strips a long run of trailing slashes quickly", () => {
+    const start = performance.now();
+    expect(commentMarker(`analytics${"/".repeat(100_000)}x/`)).toContain("analytics/");
+    expect(commentMarker(`analytics${"/".repeat(100_000)}`)).toBe(
+      "<!-- dataform-cost-check:analytics -->",
+    );
+    expect(performance.now() - start).toBeLessThan(1000);
+  });
+
   it("gives each project directory its own marker and title", () => {
     expect(commentMarker("./analytics/")).toBe("<!-- dataform-cost-check:analytics -->");
     expect(commentMarker("a/b")).not.toBe(commentMarker("a"));

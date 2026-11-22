@@ -17,11 +17,13 @@ export function commentMarker(projectDir = "."): string {
 }
 
 function normalizeDir(projectDir: string): string {
-  return projectDir
-    .replace(/^\.\/+/, "")
-    .replace(/\/+$/, "")
-    .replace(/^\.$/, "")
-    .replace(/--/g, "-");
+  let dir = projectDir.replace(/^\.\/+/, "");
+  // A loop, not /\/+$/, which backtracks on long runs of slashes (CodeQL js/polynomial-redos).
+  while (dir.endsWith("/")) dir = dir.slice(0, -1);
+  if (dir === ".") dir = "";
+  // "--" cannot appear inside an HTML comment, and the marker is one. Collapse whole runs:
+  // replacing "--" pairs once leaves "--" behind from "---".
+  return dir.replace(/-{2,}/g, "-");
 }
 
 const UNITS = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"] as const;

@@ -63,6 +63,8 @@ interface CompiledAction {
     readonly schema?: string;
     readonly name?: string;
   };
+  /** The target before release-config overrides: `name` carries no table prefix. */
+  readonly canonicalTarget?: { readonly name?: string };
   readonly query?: string;
   readonly incrementalQuery?: string;
   readonly preOps?: readonly string[];
@@ -202,7 +204,9 @@ function toModel(
   }
   return {
     target: [database, schema, name].filter(Boolean).join("."),
-    name,
+    // The name as written in the project, so a `table-prefix` override does not stop
+    // `runs_per_day` entries from matching.
+    name: action.canonicalTarget?.name ?? name,
     type,
     query,
     ...(action.incrementalQuery !== undefined && { incrementalQuery: action.incrementalQuery }),

@@ -54,6 +54,31 @@ describe("compileProject", () => {
       "orders_recent",
     ]);
   });
+
+  // Release-config overrides, applied by the real CLI: every target, ref() and self() moves
+  // to production, declared sources stay put, and names stay as written for runs_per_day.
+  it.skipIf(!hasDataformCli())("compiles with release-config overrides", async () => {
+    const models = await loadModels({
+      projectDir,
+      overrides: {
+        defaultDatabase: "prod-proj",
+        schemaSuffix: "prod",
+        tablePrefix: "rel",
+        defaultLocation: "EU",
+      },
+    });
+    const daily = models.find((m) => m.name === "orders_daily");
+    expect(daily?.target).toBe("prod-proj.analytics_prod.rel_orders_daily");
+    expect(daily?.location).toBe("EU");
+    expect(daily?.incrementalQuery).toContain("FROM `cost-check-sample.raw.orders`");
+    expect(daily?.incrementalQuery).toContain("FROM `prod-proj.analytics_prod.rel_orders_daily`");
+    expect(models.find((m) => m.name === "customers_unique")?.target).toBe(
+      "prod-proj.analytics_assertions_prod.rel_customers_unique",
+    );
+    expect(models.find((m) => m.name === "grant_readers")?.query).toContain(
+      "`prod-proj.analytics_prod.rel_customers`",
+    );
+  });
 });
 
 describe("compileArgs", () => {

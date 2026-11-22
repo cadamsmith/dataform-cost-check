@@ -133,7 +133,8 @@ jobs:
 **Compile as production.** If production runs from a release config with compilation
 overrides (another project, a schema suffix, variables), set the same values in the inputs
 above. Otherwise the check compiles your development settings, and dry runs may read
-datasets that do not exist or use the wrong variable values.
+datasets that do not exist or use the wrong variable values. Models keep the names
+written in the project, so `runs_per_day` entries match with or without a table prefix.
 
 Configuration, in `dataform-cost-check.yml` (see [`dataform-cost-check.example.yml`](dataform-cost-check.example.yml)).
 Without the file, every model is assumed to run once a day, no limit applies, and the comment

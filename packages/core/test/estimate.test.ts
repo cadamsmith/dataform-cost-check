@@ -6,14 +6,16 @@ import {
   PARTITION_JUMP_MIN_BYTES,
   PARTITION_JUMP_RATIO,
   buildReport,
+  diffModels,
   estimateChange,
   estimateChanges,
   limitCannotApply,
   partitionFilterCause,
   preOpsVariableIn,
   readsNewTarget,
+  withViewReaders,
 } from "../src/index.ts";
-import type { Config, Estimate } from "../src/index.ts";
+import type { Config, DryRunner, Estimate, Model, Report } from "../src/index.ts";
 import { model } from "./helpers.ts";
 
 const config: Config = { ...DEFAULT_CONFIG, limitMonthly: 100 };
@@ -446,5 +448,54 @@ describe("built-in list prices in the report", () => {
       byLocation: { "europe-west2": 7.8125 },
     });
     expect(report.estimates[0]).toMatchObject({ pricePerTib: 7.8125, location: "europe-west2" });
+  });
+});
+
+describe("a table the same PR adds, read through a view", () => {
+  const T = "proj.analytics.new_source";
+  // Like BigQuery: a query fails when it names a table or view that does not exist yet.
+  const missing = ["new_source", "v1", "v2"].map((n) => `\`proj.analytics.${n}\``);
+  const runner: DryRunner = {
+    estimate: (sql) =>
+      Promise.resolve(
+        missing.some((m) => sql.includes(m))
+          ? { error: "Not found: Table proj:analytics.new_source", errorKind: "not-found" }
+          : { bytes: 1024 },
+      ),
+  };
+  const run = (base: Model[], head: Model[]) =>
+    estimateChanges(withViewReaders(diffModels(base, head), base, head), runner, config);
+  const reader = (report: Report) => report.estimates.find((e) => e.name === "reader");
+
+  const source = model({ name: "new_source" });
+  const oldReader = model({ name: "reader", query: "SELECT * FROM `proj.raw.orders`" });
+
+  it("names the table when a changed model reads it through a new view", async () => {
+    const view = model({ name: "v", type: "view", query: `SELECT * FROM \`${T}\`` });
+    const newReader = model({ name: "reader", query: "SELECT * FROM `proj.analytics.v`" });
+    const report = await run([oldReader], [source, view, newReader]);
+    expect(reader(report)).toMatchObject({ status: "unestimable", newUpstream: T });
+  });
+
+  it("names the table when an unchanged model reads it through a changed view", async () => {
+    const oldView = model({ name: "v", type: "view", query: "SELECT * FROM `proj.raw.orders`" });
+    const newView = model({ name: "v", type: "view", query: `SELECT * FROM \`${T}\`` });
+    const r = model({ name: "reader", query: "SELECT * FROM `proj.analytics.v`" });
+    const report = await run([oldView, r], [source, newView, r]);
+    expect(reader(report)).toMatchObject({ status: "unestimable", newUpstream: T });
+  });
+
+  it("names the table when the path runs through two new views, in either order", async () => {
+    const v1 = model({ name: "v1", type: "view", query: `SELECT * FROM \`${T}\`` });
+    const v2 = model({ name: "v2", type: "view", query: "SELECT * FROM `proj.analytics.v1`" });
+    const newReader = model({ name: "reader", query: "SELECT * FROM `proj.analytics.v2`" });
+    for (const head of [
+      [source, v1, v2, newReader],
+      [source, v2, v1, newReader],
+    ]) {
+      const report = await run([oldReader], head);
+      expect(reader(report)).toMatchObject({ status: "unestimable" });
+      expect(reader(report)).toMatchObject({ newUpstream: T });
+    }
   });
 });

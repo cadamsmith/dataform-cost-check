@@ -85,6 +85,7 @@ describe("renderComment", () => {
         report({
           estimates: [ordersDaily, customers, view, broken],
           totalMonthlyDelta: 6750.92,
+          fullRefresh: { baseUsd: 12.5, headUsd: 19.69, leftOut: 1 },
           limitMonthly: 100,
           overLimit: true,
         }),
@@ -432,21 +433,19 @@ describe("full refresh line", () => {
       }),
     );
     expect(body).toContain(
-      "**Full refresh:** rebuilding the changed models from scratch reads an estimated $12.50 → $43.75 per rebuild (+$31.25), not part of the monthly figure.",
+      "**Full refresh:** one rebuild of the changed models from scratch, an estimated $12.50 → $43.75 (+$31.25), not part of the monthly figure.",
     );
   });
 
-  it("says how many incremental models it left out", () => {
+  it("says how many changed models it left out", () => {
     const one = renderComment(
       report({ estimates: [ordersDaily], fullRefresh: { baseUsd: 1, headUsd: 2, leftOut: 1 } }),
     );
-    expect(one).toContain("1 incremental model is left out: its full refresh could not be sized.");
+    expect(one).toContain("1 changed model is left out: its rebuild could not be sized.");
     const two = renderComment(
       report({ estimates: [ordersDaily], fullRefresh: { baseUsd: 1, headUsd: 2, leftOut: 2 } }),
     );
-    expect(two).toContain(
-      "2 incremental models are left out: their full refresh could not be sized.",
-    );
+    expect(two).toContain("2 changed models are left out: their rebuild could not be sized.");
   });
 
   it("is absent without a figure", () => {
@@ -459,8 +458,6 @@ describe("full refresh line, nothing sized", () => {
     const body = renderComment(
       report({ estimates: [ordersDaily], fullRefresh: { baseUsd: 0, headUsd: 0, leftOut: 1 } }),
     );
-    expect(body).toContain(
-      "**Full refresh:** could not be sized for 1 incremental model in this change.",
-    );
+    expect(body).toContain("**Full refresh:** could not be sized for 1 changed model.");
   });
 });

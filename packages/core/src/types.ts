@@ -183,8 +183,14 @@ export type Estimate =
        * exists only inside Dataform's script, so the query alone is not dry-run.
        */
       readonly preOpsTempTable?: string;
-      /** A new incremental model: its first run, a full refresh, when it could be sized. */
+      /**
+       * One full rebuild, before and after, when it could be sized even though the
+       * steady state could not: a new incremental's first run, or an incremental whose
+       * pre-operations block only its incremental query.
+       */
       readonly fullRefresh?: FullRefresh;
+      /** True when either side is an incremental model. */
+      readonly involvesIncremental?: boolean;
     };
 
 /**
@@ -273,7 +279,7 @@ export interface Report {
   /**
    * One full rebuild of the changed models, when an incremental model is among them. Not
    * part of `totalMonthlyDelta` or the limit. `leftOut` counts incremental models whose
-   * full refresh could not be sized.
+   * rebuild could not be sized.
    */
   readonly fullRefresh?: {
     readonly baseUsd: number;

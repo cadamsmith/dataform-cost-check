@@ -289,23 +289,20 @@ function headline(report: Report): string {
 function fullRefreshLine(report: Report): string | undefined {
   const f = report.fullRefresh;
   if (f === undefined) return undefined;
+  const count = (n: number) => (n === 1 ? "1 changed model" : `${String(n)} changed models`);
   if (f.baseUsd === 0 && f.headUsd === 0) {
     if (f.leftOut === 0) return undefined;
-    const models =
-      f.leftOut === 1 ? "1 incremental model" : `${String(f.leftOut)} incremental models`;
-    return `**Full refresh:** could not be sized for ${models} in this change.`;
+    return `**Full refresh:** could not be sized for ${count(f.leftOut)}.`;
   }
   const delta = f.headUsd - f.baseUsd;
   const change = Math.abs(delta) < 1e-9 ? "no change" : formatUsd(delta, { signed: true });
   const leftOut =
     f.leftOut === 0
       ? ""
-      : f.leftOut === 1
-        ? " 1 incremental model is left out: its full refresh could not be sized."
-        : ` ${String(f.leftOut)} incremental models are left out: their full refresh could not be sized.`;
+      : ` ${count(f.leftOut)} ${f.leftOut === 1 ? "is" : "are"} left out: ${f.leftOut === 1 ? "its" : "their"} rebuild could not be sized.`;
   return (
-    `**Full refresh:** rebuilding the changed models from scratch reads an estimated ` +
-    `${formatUsd(f.baseUsd)} → ${formatUsd(f.headUsd)} per rebuild (${change}), ` +
+    `**Full refresh:** one rebuild of the changed models from scratch, an estimated ` +
+    `${formatUsd(f.baseUsd)} → ${formatUsd(f.headUsd)} (${change}), ` +
     `not part of the monthly figure.${leftOut}`
   );
 }

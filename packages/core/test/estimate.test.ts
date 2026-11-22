@@ -727,3 +727,66 @@ describe("full refresh estimate, nothing sized", () => {
     expect(report.fullRefresh).toEqual({ baseUsd: 0, headUsd: 0, leftOut: 1 });
   });
 });
+
+describe("full refresh estimate, pre_operations", () => {
+  const TIB = BYTES_PER_TIB;
+  it("sizes a checkpoint incremental's full refresh, though its steady state is not estimated", async () => {
+    const preOps = ["DECLARE checkpoint DATE DEFAULT (SELECT MAX(d) FROM t)"];
+    const side = (full: string) =>
+      model({
+        name: "i",
+        type: "incremental",
+        query: full,
+        incrementalQuery: "SELECT * FROM s WHERE d > checkpoint",
+        incrementalPreOps: preOps,
+      });
+    const base = side("full-old");
+    const head = side("full-new");
+    const runner = new FakeDryRunner([
+      ["full-old", { bytes: TIB }],
+      ["full-new", { bytes: 2 * TIB }],
+    ]);
+    const report = await estimateChanges(
+      [{ kind: "modified", target: base.target, base, head }],
+      runner,
+      config,
+    );
+    expect(report.estimates[0]).toMatchObject({
+      status: "unestimable",
+      preOpsVariable: "checkpoint",
+    });
+    expect(report.fullRefresh).toEqual({ baseUsd: 6.25, headUsd: 12.5, leftOut: 0 });
+  });
+
+  it("counts a model that reads a temp table as left out of the rebuild", async () => {
+    const temp = model({
+      name: "scoped",
+      query: "SELECT * FROM o JOIN scope USING (id)",
+      preOps: ["CREATE TEMP TABLE scope AS SELECT 1 AS id"],
+    });
+    const inc = {
+      base: model({ name: "i", type: "incremental", query: "full-old", incrementalQuery: "a" }),
+      head: model({ name: "i", type: "incremental", query: "full-new", incrementalQuery: "b" }),
+    };
+    const runner = new FakeDryRunner([
+      ["full-old", { bytes: TIB }],
+      ["full-new", { bytes: TIB }],
+      ["a", { bytes: 1 }],
+      ["b", { bytes: 1 }],
+    ]);
+    const report = await estimateChanges(
+      [
+        { kind: "modified", target: inc.base.target, ...inc },
+        {
+          kind: "modified",
+          target: temp.target,
+          base: temp,
+          head: { ...temp, query: `${temp.query} -- x` },
+        },
+      ],
+      runner,
+      config,
+    );
+    expect(report.fullRefresh).toEqual({ baseUsd: 6.25, headUsd: 6.25, leftOut: 1 });
+  });
+});

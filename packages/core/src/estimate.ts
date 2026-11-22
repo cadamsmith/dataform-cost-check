@@ -1,7 +1,7 @@
 import {
   exceedsLimit,
   listPriceFor,
-  monthlyDelta,
+  monthlyCost,
   pricePerTibFor,
   runsPerDayFor,
 } from "./pricing.ts";
@@ -218,8 +218,13 @@ export async function estimateChange(
     return { ...common, ...dryRunFailed("head", headResult) };
   }
 
+  // Each side at its own frequency and price: a new tag or location changes the spend
+  // even when the bytes do not.
   const runsPerDay = runsPerDayFor(model, config);
   const pricePerTib = pricePerTibFor(model, config);
+  const baseModel = change.kind === "modified" ? change.base : model;
+  const baseRunsPerDay = runsPerDayFor(baseModel, config);
+  const basePricePerTib = pricePerTibFor(baseModel, config);
   const likelyCause = partitionFilterCause(baseResult, headResult);
   return {
     status: "estimated",
@@ -228,8 +233,11 @@ export async function estimateChange(
     baseBytes: baseResult.bytes,
     headBytes: headResult.bytes,
     runsPerDay,
+    ...(baseRunsPerDay !== runsPerDay && { baseRunsPerDay }),
     pricePerTib,
-    monthlyDelta: monthlyDelta(baseResult.bytes, headResult.bytes, pricePerTib, runsPerDay),
+    monthlyDelta:
+      monthlyCost(headResult.bytes, pricePerTib, runsPerDay) -
+      monthlyCost(baseResult.bytes, basePricePerTib, baseRunsPerDay),
     ...(likelyCause !== undefined && { likelyCause }),
     ...(head?.merge !== undefined && { merge: head.merge }),
     ...(change.kind === "modified" &&
@@ -280,10 +288,13 @@ function listPrices(estimates: readonly Estimate[], config: Config): Pick<Report
 
 /** Total the estimates and apply the limit. Pure. */
 export function buildReport(estimates: readonly Estimate[], config: Config): Report {
-  const totalMonthlyDelta = estimates.reduce(
-    (sum, e) => (e.status === "estimated" ? sum + e.monthlyDelta : sum),
+  const sum = estimates.reduce(
+    (total, e) => (e.status === "estimated" ? total + e.monthlyDelta : total),
     0,
   );
+  // Changes that cancel out can leave float noise (0.1 + 0.2 - 0.3), which would read as an
+  // increase and fail a limit of 0. Nothing real is this small: a byte a day is ~2e-10.
+  const totalMonthlyDelta = Math.abs(sum) < 1e-9 ? 0 : sum;
   return {
     estimates,
     totalMonthlyDelta,

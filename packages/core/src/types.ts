@@ -114,7 +114,10 @@ export type Estimate =
       readonly baseBytes: number;
       /** Bytes per run at head; 0 for removed models. */
       readonly headBytes: number;
+      /** Runs per day at head (at base, for removed models). */
       readonly runsPerDay: number;
+      /** Runs per day at base, when it differs from `runsPerDay` (e.g. a new tag). */
+      readonly baseRunsPerDay?: number;
       /**
        * USD per TiB this model was priced at. 0 means bytes do not map to dollars here
        * (for example, slot-based pricing): the comment shows bytes, not dollars.

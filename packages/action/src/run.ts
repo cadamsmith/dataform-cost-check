@@ -38,7 +38,7 @@ export const SUMMARY_MAX_LENGTH = 900_000;
 /** The whole check, minus I/O: diff, estimate, render. */
 export async function runCheck(deps: RunDeps): Promise<RunResult> {
   const [base, head] = await Promise.all([deps.loadModels("base"), deps.loadModels("head")]);
-  const changes = withViewReaders(diffModels(base, head), base, head);
+  const changes = withViewReaders(diffModels(base, head, deps.config), base, head);
   const estimated = await estimateChanges(changes, deps.runner, deps.config);
   const report =
     deps.config.history === true && deps.readHistory !== undefined && estimated.estimates.length > 0

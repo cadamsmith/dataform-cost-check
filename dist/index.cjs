@@ -45895,9 +45895,6 @@ function monthlyCost(bytes, pricePerTib, runsPerDay) {
   assertNonNegative("runsPerDay", runsPerDay);
   return bytesToTib(bytes) * pricePerTib * runsPerDay * DAYS_PER_MONTH;
 }
-function monthlyDelta(baseBytes, headBytes, pricePerTib, runsPerDay) {
-  return monthlyCost(headBytes, pricePerTib, runsPerDay) - monthlyCost(baseBytes, pricePerTib, runsPerDay);
-}
 function pricePerTibFor(model, config) {
   const location = model.location;
   if (location !== void 0) {
@@ -45923,9 +45920,10 @@ function lookup(prices, location) {
   return void 0;
 }
 function runsPerDayFor(model, config) {
-  const byName = config.runsPerDay[model.name];
+  const override = (key) => Object.hasOwn(config.runsPerDay, key) ? config.runsPerDay[key] : void 0;
+  const byName = override(model.name);
   if (byName !== void 0) return byName;
-  const byTag = model.tags.map((tag) => config.runsPerDay[tag]).filter((n) => n !== void 0);
+  const byTag = model.tags.map(override).filter((n) => n !== void 0);
   if (byTag.length > 0) return Math.max(...byTag);
   return config.defaultRunsPerDay;
 }
@@ -45939,14 +45937,15 @@ function assertNonNegative(name, value) {
 }
 
 // ../core/src/diff.ts
-function diffModels(base, head) {
+function diffModels(base, head, config) {
   const baseByTarget = indexByTarget(base, "base");
   const headByTarget = indexByTarget(head, "head");
   const changes = [];
   for (const [target, h2] of headByTarget) {
     const b = baseByTarget.get(target);
     if (b === void 0) changes.push({ kind: "added", target, head: h2 });
-    else if (sqlDiffers(b, h2)) changes.push({ kind: "modified", target, base: b, head: h2 });
+    else if (sqlDiffers(b, h2) || config !== void 0 && pricingDiffers(b, h2, config))
+      changes.push({ kind: "modified", target, base: b, head: h2 });
   }
   for (const [target, b] of baseByTarget) {
     if (!headByTarget.has(target)) changes.push({ kind: "removed", target, base: b });
@@ -45955,6 +45954,9 @@ function diffModels(base, head) {
 }
 function sqlDiffers(a, b) {
   return a.type !== b.type || a.query !== b.query || a.incrementalQuery !== b.incrementalQuery || !sameStatements(a.preOps, b.preOps) || !sameStatements(a.incrementalPreOps, b.incrementalPreOps);
+}
+function pricingDiffers(a, b, config) {
+  return runsPerDayFor(a, config) !== runsPerDayFor(b, config) || pricePerTibFor(a, config) !== pricePerTibFor(b, config);
 }
 function sameStatements(a = [], b = []) {
   return a.length === b.length && a.every((s2, i2) => s2 === b[i2]);
@@ -46219,7 +46221,7 @@ function byImpact(a, b) {
 }
 function row(e2) {
   const monthly = e2.pricePerTib === 0 ? "bytes only" : formatUsd(e2.monthlyDelta, { signed: true });
-  return `| \`${e2.name}\` | ${e2.kind} | ${formatBytes(e2.baseBytes)} \u2192 ${formatBytes(e2.headBytes)} | ${String(e2.runsPerDay)} | ${monthly} |`;
+  return `| \`${e2.name}\` | ${e2.kind} | ${formatBytes(e2.baseBytes)} \u2192 ${formatBytes(e2.headBytes)} | ${e2.baseRunsPerDay === void 0 ? "" : `${String(e2.baseRunsPerDay)} \u2192 `}${String(e2.runsPerDay)} | ${monthly} |`;
 }
 function notesFor(e2) {
   return [
@@ -46416,6 +46418,9 @@ async function estimateChange(change, runner, config, newTargets = /* @__PURE__ 
   }
   const runsPerDay = runsPerDayFor(model, config);
   const pricePerTib = pricePerTibFor(model, config);
+  const baseModel = change.kind === "modified" ? change.base : model;
+  const baseRunsPerDay = runsPerDayFor(baseModel, config);
+  const basePricePerTib = pricePerTibFor(baseModel, config);
   const likelyCause = partitionFilterCause(baseResult, headResult);
   return {
     status: "estimated",
@@ -46424,8 +46429,9 @@ async function estimateChange(change, runner, config, newTargets = /* @__PURE__ 
     baseBytes: baseResult.bytes,
     headBytes: headResult.bytes,
     runsPerDay,
+    ...baseRunsPerDay !== runsPerDay && { baseRunsPerDay },
     pricePerTib,
-    monthlyDelta: monthlyDelta(baseResult.bytes, headResult.bytes, pricePerTib, runsPerDay),
+    monthlyDelta: monthlyCost(headResult.bytes, pricePerTib, runsPerDay) - monthlyCost(baseResult.bytes, basePricePerTib, baseRunsPerDay),
     ...likelyCause !== void 0 && { likelyCause },
     ...head?.merge !== void 0 && { merge: head.merge },
     ...change.kind === "modified" && change.viaViews !== void 0 && { viaViews: change.viaViews },
@@ -46453,10 +46459,11 @@ function listPrices(estimates, config) {
   return Object.keys(byLocation).length === 0 ? {} : { listPrices: { asOf: ON_DEMAND_PRICES_AS_OF, byLocation } };
 }
 function buildReport(estimates, config) {
-  const totalMonthlyDelta = estimates.reduce(
-    (sum, e2) => e2.status === "estimated" ? sum + e2.monthlyDelta : sum,
+  const sum = estimates.reduce(
+    (total, e2) => e2.status === "estimated" ? total + e2.monthlyDelta : total,
     0
   );
+  const totalMonthlyDelta = Math.abs(sum) < 1e-9 ? 0 : sum;
   return {
     estimates,
     totalMonthlyDelta,
@@ -46846,7 +46853,7 @@ async function upsertStickyComment(options) {
 var SUMMARY_MAX_LENGTH = 9e5;
 async function runCheck(deps) {
   const [base, head] = await Promise.all([deps.loadModels("base"), deps.loadModels("head")]);
-  const changes = withViewReaders(diffModels(base, head), base, head);
+  const changes = withViewReaders(diffModels(base, head, deps.config), base, head);
   const estimated = await estimateChanges(changes, deps.runner, deps.config);
   const report = deps.config.history === true && deps.readHistory !== void 0 && estimated.estimates.length > 0 ? { ...estimated, history: await deps.readHistory(estimated.estimates.map((e2) => e2.target)) } : estimated;
   const shared = {

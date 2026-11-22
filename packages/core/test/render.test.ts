@@ -402,3 +402,14 @@ describe("readers of changed views", () => {
     );
   });
 });
+
+describe("runs per day that change", () => {
+  it("shows base and head runs per day in the row", () => {
+    const body = renderComment(
+      report({
+        estimates: [{ ...customers, kind: "modified", baseRunsPerDay: 1, runsPerDay: 24 }],
+      }),
+    );
+    expect(body).toContain("| `customers` | modified | 0 B → 5.00 GiB | 1 → 24 | +$0.92 |");
+  });
+});

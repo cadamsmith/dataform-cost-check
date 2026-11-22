@@ -451,6 +451,69 @@ describe("built-in list prices in the report", () => {
   });
 });
 
+describe("runs per day that change", () => {
+  const cfg: Config = { ...DEFAULT_CONFIG, runsPerDay: { hourly: 24 } };
+  const runner = new FakeDryRunner([
+    ["old", { bytes: BYTES_PER_TIB }],
+    ["new", { bytes: BYTES_PER_TIB }],
+  ]);
+
+  it("prices each side at its own runs per day", async () => {
+    const base = model({ name: "t", query: "old", tags: ["daily"] });
+    const head = model({ name: "t", query: "new", tags: ["hourly"] });
+    const e = await estimateChange(
+      { kind: "modified", target: base.target, base, head },
+      runner,
+      cfg,
+    );
+    expect(e).toMatchObject({
+      status: "estimated",
+      runsPerDay: 24,
+      baseRunsPerDay: 1,
+      monthlyDelta: 6.25 * 23 * 30,
+    });
+  });
+
+  it("estimates a retagged model whose SQL is unchanged", async () => {
+    const base = model({ name: "t", query: "old", tags: ["daily"] });
+    const head = { ...base, tags: ["hourly"] };
+    const report = await estimateChanges(diffModels([base], [head], cfg), runner, cfg);
+    expect(report.totalMonthlyDelta).toBe(6.25 * 23 * 30);
+  });
+
+  it("leaves baseRunsPerDay out when it did not change", async () => {
+    const base = model({ name: "t", query: "old" });
+    const head = model({ name: "t", query: "new" });
+    const e = await estimateChange(
+      { kind: "modified", target: base.target, base, head },
+      runner,
+      cfg,
+    );
+    expect(e).not.toHaveProperty("baseRunsPerDay");
+  });
+});
+
+describe("buildReport totals", () => {
+  const priced = (monthlyDelta: number): Estimate => ({
+    status: "estimated",
+    target: "p.d.t",
+    name: "t",
+    kind: "modified",
+    type: "table",
+    baseBytes: 0,
+    headBytes: 0,
+    runsPerDay: 1,
+    pricePerTib: 6.25,
+    monthlyDelta,
+  });
+
+  it("treats float noise from changes that cancel out as no change, so a 0 limit passes", () => {
+    const r = buildReport([priced(0.1), priced(0.2), priced(-0.3)], { ...config, limitMonthly: 0 });
+    expect(r.totalMonthlyDelta).toBe(0);
+    expect(r.overLimit).toBe(false);
+  });
+});
+
 describe("a table the same PR adds, read through a view", () => {
   const T = "proj.analytics.new_source";
   // Like BigQuery: a query fails when it names a table or view that does not exist yet.

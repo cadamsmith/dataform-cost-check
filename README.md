@@ -1,5 +1,6 @@
 # Dataform Cost Check
 
+[![GitHub Marketplace](https://img.shields.io/badge/Marketplace-Dataform%20Cost%20Check-blue?logo=github)](https://github.com/marketplace/actions/dataform-cost-check)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/cadamsmith/dataform-cost-check/badge)](https://scorecard.dev/viewer/?uri=github.com/cadamsmith/dataform-cost-check)
 
 > **Status: alpha (0.4.1).** It runs end to end in GitHub Actions with keyless sign-in to

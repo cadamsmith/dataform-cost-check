@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 Dataform Cost Check: a GitHub Action that posts BigQuery cost estimates on Dataform PRs.
-Pre-alpha. See `README.md`, `CONTRIBUTING.md` and `docs/design.md`.
+Alpha. See `README.md`, `CONTRIBUTING.md` and `docs/design.md`.
 
 ## Product scope (read before adding features)
 

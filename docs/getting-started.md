@@ -97,7 +97,7 @@ jobs:
       # Only if your project has a package.json that pins @dataform/core:
       - run: npm ci
       # Pin a release's full commit SHA (see the release page), not a tag.
-      - uses: cadamsmith/dataform-cost-check@914a5b1497a904948a3af6f278b549e830f5d4d6 # v0.3.1
+      - uses: cadamsmith/dataform-cost-check@9d4034490709eb35e44bbed7af767784d418865a # v0.4.0
 ```
 
 If the Dataform project is not at the repository root, add `project-dir: path/to/project` under
@@ -112,7 +112,7 @@ schema suffix, compilation variables), pass the same values so the check compile
 production runs:
 
 ```yaml
-- uses: cadamsmith/dataform-cost-check@914a5b1497a904948a3af6f278b549e830f5d4d6 # v0.3.1
+- uses: cadamsmith/dataform-cost-check@9d4034490709eb35e44bbed7af767784d418865a # v0.4.0
   with:
     default-database: my-prod-project
     schema-suffix: ""

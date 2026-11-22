@@ -1,5 +1,7 @@
 # Dataform Cost Check
 
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/cadamsmith/dataform-cost-check/badge)](https://scorecard.dev/viewer/?uri=github.com/cadamsmith/dataform-cost-check)
+
 > **Status: alpha (0.4.0).** It runs end to end in GitHub Actions with keyless sign-in to
 > Google Cloud, tested on a private Dataform 3 project with JavaScript-defined actions. Try it
 > on a non-critical repository first, and tell us what it gets wrong.

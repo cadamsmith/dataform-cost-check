@@ -47,7 +47,9 @@ describe("compileProject", () => {
     expect(models.map((m) => m.name).sort()).toEqual([
       "customers",
       "customers_unique",
+      "drop_stale_orders",
       "grant_readers",
+      "orders_by_customer",
       "orders_daily",
       "orders_recent",
     ]);

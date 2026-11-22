@@ -32,6 +32,41 @@
       "type": "incremental",
       "target": {
         "schema": "analytics",
+        "name": "orders_by_customer",
+        "database": "cost-check-sample"
+      },
+      "query": "SELECT order_date, customer_id, COUNT(*) AS orders\nFROM `cost-check-sample.raw.orders`\n\nGROUP BY order_date, customer_id",
+      "disabled": false,
+      "preOps": ["DECLARE checkpoint DATE DEFAULT (SELECT DATE '2000-01-01')"],
+      "fileName": "definitions/orders_by_customer.js",
+      "bigquery": {
+        "partitionBy": "order_date"
+      },
+      "actionDescriptor": {
+        "description": "Orders per customer per day, appended from a checkpoint."
+      },
+      "incrementalQuery": "SELECT order_date, customer_id, COUNT(*) AS orders\nFROM `cost-check-sample.raw.orders`\nWHERE order_date > checkpoint\nGROUP BY order_date, customer_id",
+      "dependencyTargets": [
+        {
+          "schema": "raw",
+          "name": "orders",
+          "database": "cost-check-sample"
+        }
+      ],
+      "incrementalPreOps": [
+        "DECLARE checkpoint DATE DEFAULT (SELECT MAX(order_date) FROM `cost-check-sample.analytics.orders_by_customer`)"
+      ],
+      "canonicalTarget": {
+        "schema": "analytics",
+        "name": "orders_by_customer",
+        "database": "cost-check-sample"
+      },
+      "enumType": "INCREMENTAL"
+    },
+    {
+      "type": "incremental",
+      "target": {
+        "schema": "analytics",
         "name": "orders_daily",
         "database": "cost-check-sample"
       },
@@ -115,6 +150,29 @@
         "name": "grant_readers",
         "database": "cost-check-sample"
       }
+    },
+    {
+      "target": {
+        "schema": "analytics",
+        "name": "drop_stale_orders",
+        "database": "cost-check-sample"
+      },
+      "queries": [
+        "DELETE FROM `cost-check-sample.analytics.orders_by_customer` WHERE order_date < DATE_SUB(CURRENT_DATE(), INTERVAL 400 DAY)"
+      ],
+      "fileName": "definitions/orders_by_customer.js",
+      "dependencyTargets": [
+        {
+          "schema": "analytics",
+          "name": "orders_by_customer",
+          "database": "cost-check-sample"
+        }
+      ],
+      "canonicalTarget": {
+        "schema": "analytics",
+        "name": "drop_stale_orders",
+        "database": "cost-check-sample"
+      }
     }
   ],
   "assertions": [
@@ -184,6 +242,16 @@
     {
       "schema": "analytics",
       "name": "grant_readers",
+      "database": "cost-check-sample"
+    },
+    {
+      "schema": "analytics",
+      "name": "orders_by_customer",
+      "database": "cost-check-sample"
+    },
+    {
+      "schema": "analytics",
+      "name": "drop_stale_orders",
       "database": "cost-check-sample"
     },
     {

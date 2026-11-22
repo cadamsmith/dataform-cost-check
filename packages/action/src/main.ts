@@ -100,7 +100,8 @@ async function main(): Promise<void> {
   await core.summary.addRaw(summary).write();
   core.setOutput("monthly-delta", report.totalMonthlyDelta.toFixed(2));
   core.setOutput("over-limit", String(report.overLimit));
-  await postComment(pr, comment, projectDir);
+  // With no changed models, only keep an earlier comment current: don't start a new one.
+  await postComment(pr, comment, projectDir, report.estimates.length === 0);
 
   if (limitCannotApply(report)) {
     core.warning(
@@ -121,6 +122,7 @@ async function postComment(
   pr: Awaited<ReturnType<typeof readPullRequestContext>>,
   body: string,
   projectDir: string,
+  updateOnly: boolean,
 ): Promise<void> {
   const token = core.getInput("github-token");
   if (pr === undefined || !token) {
@@ -128,14 +130,19 @@ async function postComment(
     return;
   }
   try {
-    const { action, url } = await upsertStickyComment({
+    const result = await upsertStickyComment({
       token,
       pr,
       body,
       marker: commentMarker(projectDir),
+      updateOnly,
       apiUrl: process.env.GITHUB_API_URL,
     });
-    core.info(`Comment ${action}: ${url}`);
+    core.info(
+      result.action === "skipped"
+        ? "No models changed and no earlier comment to update, so no comment was posted."
+        : `Comment ${result.action}: ${result.url}`,
+    );
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     core.warning(

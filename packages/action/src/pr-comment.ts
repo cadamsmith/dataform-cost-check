@@ -60,14 +60,20 @@ export interface PostCommentOptions {
   readonly pr: PullRequestContext;
   readonly body: string;
   readonly marker: string;
+  /** Edit the sticky comment if there is one, but never create it. */
+  readonly updateOnly?: boolean;
   readonly apiUrl?: string | undefined;
   readonly fetch?: typeof fetch;
 }
 
-/** Creates the sticky comment, or edits it in place. Returns what it did. */
-export async function upsertStickyComment(
-  options: PostCommentOptions,
-): Promise<{ action: "created" | "updated"; url: string }> {
+export type PostCommentResult =
+  { readonly action: "created" | "updated"; readonly url: string } | { readonly action: "skipped" };
+
+/**
+ * Creates the sticky comment, or edits it in place. With `updateOnly`, a missing comment
+ * is left missing. Returns what it did.
+ */
+export async function upsertStickyComment(options: PostCommentOptions): Promise<PostCommentResult> {
   const { token, pr, body, marker } = options;
   const apiUrl = options.apiUrl ?? "https://api.github.com";
   const doFetch = options.fetch ?? fetch;
@@ -109,6 +115,7 @@ export async function upsertStickyComment(
     )) as { html_url: string };
     return { action: "updated", url: updated.html_url };
   }
+  if (options.updateOnly === true) return { action: "skipped" };
   const created = (await request("POST", `/repos/${pr.repo}/issues/${String(pr.number)}/comments`, {
     body,
   })) as { html_url: string };

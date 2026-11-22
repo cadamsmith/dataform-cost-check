@@ -46820,6 +46820,7 @@ async function upsertStickyComment(options) {
     );
     return { action: "updated", url: updated.html_url };
   }
+  if (options.updateOnly === true) return { action: "skipped" };
   const created = await request("POST", `/repos/${pr.repo}/issues/${String(pr.number)}/comments`, {
     body
   });
@@ -46935,7 +46936,7 @@ async function main() {
   await summary.addRaw(summary2).write();
   setOutput("monthly-delta", report.totalMonthlyDelta.toFixed(2));
   setOutput("over-limit", String(report.overLimit));
-  await postComment(pr, comment, projectDir);
+  await postComment(pr, comment, projectDir, report.estimates.length === 0);
   if (limitCannotApply(report)) {
     warning(
       "limit_monthly is set, but every estimated model is priced at 0 per TiB, so the limit cannot apply."
@@ -46948,21 +46949,24 @@ async function main() {
     setFailed("Estimated monthly spend change is over the configured limit.");
   }
 }
-async function postComment(pr, body, projectDir) {
+async function postComment(pr, body, projectDir, updateOnly) {
   const token = getInput("github-token");
   if (pr === void 0 || !token) {
     info("Not a pull request run, or no github-token: report is in the job summary only.");
     return;
   }
   try {
-    const { action, url } = await upsertStickyComment({
+    const result = await upsertStickyComment({
       token,
       pr,
       body,
       marker: commentMarker(projectDir),
+      updateOnly,
       apiUrl: process.env.GITHUB_API_URL
     });
-    info(`Comment ${action}: ${url}`);
+    info(
+      result.action === "skipped" ? "No models changed and no earlier comment to update, so no comment was posted." : `Comment ${result.action}: ${result.url}`
+    );
   } catch (error2) {
     const detail = error2 instanceof Error ? error2.message : String(error2);
     warning(

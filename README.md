@@ -40,7 +40,8 @@ dbt users already have cost checks; Dataform has had no packaged pull request ch
 
 ## Planned features (v1)
 
-- Sticky pull request comment with the total monthly estimate change
+- Sticky pull request comment with the total monthly estimate change (none on pull requests
+  that change no models)
 - Bytes scanned before and after, per changed model
 - Flags the most common cause of a jump: a lost partition filter
 - One configurable spending limit that can fail the check

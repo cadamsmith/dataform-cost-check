@@ -3,18 +3,47 @@
 [![GitHub Marketplace](https://img.shields.io/badge/Marketplace-Dataform%20Cost%20Check-blue?logo=github)](https://github.com/marketplace/actions/dataform-cost-check)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/cadamsmith/dataform-cost-check/badge)](https://scorecard.dev/viewer/?uri=github.com/cadamsmith/dataform-cost-check)
 
+A BigQuery cost estimate on every [Dataform](https://cloud.google.com/dataform) pull request:
+a price tag on every data change, before it ships rather than on next month's bill.
+
+[![A Dataform Cost Check comment: this change adds an estimated +$7.48 a month, and the likely cause is a removed filter on a partitioned table](docs/images/pr-comment.png)](https://github.com/cadamsmith/dataform-cost-check/pull/22)
+
+<sub>A real comment from [a demo pull request](https://github.com/cadamsmith/dataform-cost-check/pull/22) on Google's public Trends dataset, rendered by GitHub.</sub>
+
+- **Runs in your CI, against your Google Cloud project.** No service of ours, no account, no
+  telemetry. Your compiled SQL goes only to BigQuery, in the project you choose.
+- **Free and read-only.** BigQuery dry runs plan each query and report the bytes it would
+  scan, without reading data or billing anything. No write access, no keys: it signs in through
+  Workload Identity Federation.
+- **Reads the compiled project**, so `.sqlx` files and JavaScript-defined actions
+  (`publish()` loops, `includes/` helpers) are estimated the same way.
+- **Names the usual culprit**, a dropped partition filter, and can fail the check above your
+  monthly limit.
+
+**Get started: [Try it on your project](docs/getting-started.md)**, about 15 minutes, most of
+it in Google Cloud.
+
 > **Status: alpha (0.4.1).** It runs end to end in GitHub Actions with keyless sign-in to
 > Google Cloud, tested on a private Dataform 3 project with JavaScript-defined actions. Try it
 > on a non-critical repository first, and tell us what it gets wrong. Using it? Say so in
 > [this discussion](https://github.com/cadamsmith/dataform-cost-check/discussions/92).
 
-A GitHub Action that posts a BigQuery cost estimate on every pull request in a
-[Dataform](https://cloud.google.com/dataform) project: a price tag on every data change,
-before it ships rather than on next month's bill.
+## Why
+
+In Dataform, a one-line change to a query can change what it scans by orders of magnitude.
+Drop a date filter on a partitioned table and a few MiB per run can become hundreds of GiB,
+run every hour. Code review shows the SQL diff, not the bytes, so the first sign is often the
+bill. dbt users already have cost checks; Dataform had no packaged pull request check. This
+puts the estimate where the change is reviewed.
+
+It is for teams on BigQuery who manage transformations with Dataform and review changes on
+GitHub.
+
+## How it works
 
 When a pull request opens, the action compiles the Dataform project at the base and head
 commits, finds the models whose compiled SQL changed, asks BigQuery for a free dry-run byte
-count for each, and posts one sticky comment such as:
+count for each, and posts one sticky comment. A fuller example, with every section:
 
 <!-- BEGIN GENERATED: sample comment (pnpm readme) -->
 <!-- prettier-ignore-start -->
@@ -37,12 +66,7 @@ count for each, and posts one sticky comment such as:
 <!-- prettier-ignore-end -->
 <!-- END GENERATED -->
 
-## Who it is for
-
-Teams on BigQuery who manage transformations with Dataform and review changes on GitHub.
-dbt users already have cost checks; Dataform has had no packaged pull request check.
-
-## Planned features (v1)
+## What it does
 
 - Sticky pull request comment with the total monthly estimate change (none on pull requests
   that change no models)
@@ -51,9 +75,8 @@ dbt users already have cost checks; Dataform has had no packaged pull request ch
 - One configurable spending limit that can fail the check
 - Last refresh duration (and slot-hours, for slot-based pricing) per table, shown as history
   when you opt in by granting job-listing access. Never a billed query, never a forecast.
-
-It runs in your own CI against your own Google Cloud project. Nothing is sent to a
-third-party service, and no one else holds your credentials.
+- Says plainly what it did not estimate, and why: a read of a table the same pull request
+  creates, a filter on a variable set in pre-operations, a view (it costs nothing until read)
 
 ## Usage
 

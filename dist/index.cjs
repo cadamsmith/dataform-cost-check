@@ -46541,6 +46541,9 @@ var DataformCompilationError = class extends Error {
   errors;
 };
 var execFileAsync = (0, import_node_util4.promisify)(import_node_child_process.execFile);
+function isDataformProject(dir) {
+  return (0, import_node_fs2.existsSync)((0, import_node_path2.join)(dir, "workflow_settings.yaml")) || (0, import_node_fs2.existsSync)((0, import_node_path2.join)(dir, "dataform.json"));
+}
 function compilationErrors(output) {
   return output?.graphErrors?.compilationErrors ?? [];
 }
@@ -46563,6 +46566,9 @@ function parseCliJson(stdout) {
 }
 async function compileProject(options) {
   const command = options.command ?? "dataform";
+  if (!(0, import_node_fs2.existsSync)(options.projectDir)) {
+    throw new Error(`No Dataform project at ${options.projectDir}: the directory does not exist.`);
+  }
   if ((0, import_node_fs2.existsSync)((0, import_node_path2.join)(options.projectDir, "package.json")) && !(0, import_node_fs2.existsSync)((0, import_node_path2.join)(options.projectDir, "node_modules"))) {
     throw new DataformDependenciesMissingError(options.projectDir);
   }
@@ -46921,6 +46927,10 @@ async function main() {
   const repoDir = process.cwd();
   const load = (side) => side === "head" ? loadModels({ projectDir: (0, import_node_path4.resolve)(repoDir, projectDir), overrides }) : withBaseWorktree(repoDir, baseRef, async (dir) => {
     const baseProject = (0, import_node_path4.join)(dir, projectDir);
+    if (!isDataformProject(baseProject)) {
+      info(`No Dataform project at base in ${projectDir}: every model counts as added.`);
+      return [];
+    }
     await copyDependencies((0, import_node_path4.resolve)(repoDir, projectDir), baseProject);
     return loadModels({ projectDir: baseProject, overrides });
   });

@@ -9,6 +9,7 @@ import {
   DataformDependenciesMissingError,
   compileArgs,
   compileProject,
+  isDataformProject,
   loadModels,
 } from "../src/index.ts";
 
@@ -31,6 +32,13 @@ describe("compileProject", () => {
     await expect(
       compileProject({ projectDir, command: "dataform-cli-that-does-not-exist" }),
     ).rejects.toThrow(DataformCliNotFoundError);
+  });
+
+  it("says the project directory is missing, rather than the CLI", async () => {
+    const missing = join(tmpdir(), "dcc-no-such-project");
+    await expect(compileProject({ projectDir: missing })).rejects.toThrow(
+      `No Dataform project at ${missing}: the directory does not exist.`,
+    );
   });
 
   it("asks for an install when a package.json project has no node_modules", async () => {
@@ -109,5 +117,19 @@ describe.skipIf(v2Cli === undefined)("Dataform 2.x CLI", () => {
       ["totals", "table"],
     ]);
     expect(models.find((m) => m.name === "orders")?.incrementalPreOps?.[0]).toContain("DECLARE");
+  });
+});
+
+describe("isDataformProject", () => {
+  it("finds workflow_settings.yaml or a legacy dataform.json", () => {
+    expect(isDataformProject(projectDir)).toBe(true);
+    const legacy = mkdtempSync(join(tmpdir(), "dcc-legacy-"));
+    writeFileSync(join(legacy, "dataform.json"), "{}");
+    expect(isDataformProject(legacy)).toBe(true);
+  });
+
+  it("is false for an empty or missing directory, as at a base from before the project", () => {
+    expect(isDataformProject(mkdtempSync(join(tmpdir(), "dcc-empty-")))).toBe(false);
+    expect(isDataformProject(join(tmpdir(), "dcc-no-such-project"))).toBe(false);
   });
 });

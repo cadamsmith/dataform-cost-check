@@ -1,4 +1,6 @@
 import { readFileSync } from "node:fs";
+import { DEFAULT_CONFIG, FakeDryRunner, estimateChange } from "@dataform-cost-check/core";
+import type { Model } from "@dataform-cost-check/core";
 import { describe, expect, it } from "vitest";
 import { DataformCompilationError, parseCliJson, parseCompileOutput } from "../src/index.ts";
 
@@ -19,10 +21,12 @@ describe("parseCompileOutput", () => {
     const models = parseCompileOutput(sample);
     expect(models.map((m) => [m.target, m.type])).toEqual([
       ["cost-check-sample.analytics.customers", "table"],
+      ["cost-check-sample.analytics.orders_by_customer", "incremental"],
       ["cost-check-sample.analytics.orders_daily", "incremental"],
       ["cost-check-sample.analytics.orders_recent", "view"],
       ["cost-check-sample.analytics_assertions.customers_unique", "assertion"],
       ["cost-check-sample.analytics.grant_readers", "operations"],
+      ["cost-check-sample.analytics.drop_stale_orders", "operations"],
     ]);
   });
 
@@ -119,6 +123,57 @@ describe("parseCompileOutput on JavaScript-defined actions", () => {
     const inc = parseCompileOutput(jsProject).find((m) => m.name === "terms_daily");
     expect(inc?.preOps?.[0]).toContain("DECLARE checkpoint");
     expect(inc?.incrementalPreOps?.[0]).toContain("SELECT MAX(refresh_date)");
+  });
+});
+
+describe("JavaScript-defined actions in the sample project", () => {
+  const models = parseCompileOutput(sample);
+  const find = (name: string): Model => {
+    const model = models.find((m) => m.name === name);
+    if (model === undefined) throw new Error(`sample has no ${name}`);
+    return model;
+  };
+  const modified = (model: Model) => ({
+    kind: "modified" as const,
+    target: model.target,
+    base: { ...model, incrementalQuery: `${model.incrementalQuery ?? ""}\n-- base` },
+    head: model,
+  });
+
+  it("splits a publish().preOps() checkpoint into full-refresh and incremental pre-operations", () => {
+    const inc = find("orders_by_customer");
+    expect(inc.type).toBe("incremental");
+    expect(inc.preOps?.[0]).toContain("SELECT DATE '2000-01-01'");
+    expect(inc.incrementalPreOps?.[0]).toContain(
+      "SELECT MAX(order_date) FROM `cost-check-sample.analytics.orders_by_customer`",
+    );
+    expect(inc.incrementalQuery).toContain("WHERE order_date > checkpoint");
+    expect(inc.query).not.toContain("checkpoint");
+  });
+
+  it("reports the checkpoint incremental as not estimated, naming the variable, without a dry run", async () => {
+    const runner = new FakeDryRunner();
+    const estimate = await estimateChange(
+      modified(find("orders_by_customer")),
+      runner,
+      DEFAULT_CONFIG,
+    );
+    expect(estimate).toMatchObject({ status: "unestimable", preOpsVariable: "checkpoint" });
+    expect(runner.calls).toEqual([]);
+  });
+
+  it("skips an operate() action like an SQLX operation", async () => {
+    const op = find("drop_stale_orders");
+    expect(op.type).toBe("operations");
+    expect(op.query).toContain("DELETE FROM `cost-check-sample.analytics.orders_by_customer`");
+    const runner = new FakeDryRunner();
+    const estimate = await estimateChange(
+      { kind: "added", target: op.target, head: op },
+      runner,
+      DEFAULT_CONFIG,
+    );
+    expect(estimate.status).toBe("skipped");
+    expect(runner.calls).toEqual([]);
   });
 });
 

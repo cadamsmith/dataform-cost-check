@@ -29,10 +29,13 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # So the test that compiles fixtures/sample-project runs instead of skipping. Pinned
-      # to the version the adapter was built against. Installed with npm, not pnpm: the CLI
-      # requires packages it does not declare, which pnpm's strict layout does not provide.
+      # to the version the adapter was built against, by hash through the lockfile in
+      # tools/dataform-cli-3. Installed with npm, not pnpm: the CLI requires packages it
+      # does not declare, which pnpm's strict layout does not provide.
       - name: Install the Dataform CLI
-        run: npm install -g @dataform/cli@3.0.61 # zizmor: ignore[adhoc-packages]
+        run: |
+          npm ci --prefix tools/dataform-cli-3
+          echo "$GITHUB_WORKSPACE/tools/dataform-cli-3/node_modules/.bin" >> "$GITHUB_PATH"
 
       - name: Lint
         run: pnpm lint

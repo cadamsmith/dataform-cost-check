@@ -46090,7 +46090,10 @@ function commentMarker(projectDir = ".") {
   return dir === "" ? COMMENT_MARKER : `<!-- dataform-cost-check:${dir} -->`;
 }
 function normalizeDir(projectDir) {
-  return projectDir.replace(/^\.\/+/, "").replace(/\/+$/, "").replace(/^\.$/, "").replace(/--/g, "-");
+  let dir = projectDir.replace(/^\.\/+/, "");
+  while (dir.endsWith("/")) dir = dir.slice(0, -1);
+  if (dir === ".") dir = "";
+  return dir.replace(/-{2,}/g, "-");
 }
 var UNITS = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"];
 function causeText(cause) {

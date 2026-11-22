@@ -46143,6 +46143,8 @@ function renderComment(report, {
     ].join("\n") + "\n";
   }
   head.push(headline(report), "");
+  const rebuild = fullRefreshLine(report);
+  if (rebuild !== void 0) head.push(rebuild, "");
   const estimated = report.estimates.filter((e2) => e2.status === "estimated").sort(byImpact);
   const notEstimated = report.estimates.filter((e2) => e2.status !== "estimated");
   const body = [];
@@ -46285,6 +46287,19 @@ function headline(report) {
   }
   return text;
 }
+function fullRefreshLine(report) {
+  const f3 = report.fullRefresh;
+  if (f3 === void 0) return void 0;
+  const count = (n) => n === 1 ? "1 changed model" : `${String(n)} changed models`;
+  if (f3.baseUsd === 0 && f3.headUsd === 0) {
+    if (f3.leftOut === 0) return void 0;
+    return `**Full refresh:** could not be sized for ${count(f3.leftOut)}.`;
+  }
+  const delta = f3.headUsd - f3.baseUsd;
+  const change = Math.abs(delta) < 1e-9 ? "no change" : formatUsd(delta, { signed: true });
+  const leftOut = f3.leftOut === 0 ? "" : ` ${count(f3.leftOut)} ${f3.leftOut === 1 ? "is" : "are"} left out: ${f3.leftOut === 1 ? "its" : "their"} rebuild could not be sized.`;
+  return `**Full refresh:** one rebuild of the changed models from scratch, an estimated ${formatUsd(f3.baseUsd)} \u2192 ${formatUsd(f3.headUsd)} (${change}), not part of the monthly figure.${leftOut}`;
+}
 function footer(report, configPath, configFound) {
   const byLocation = Object.entries(report.pricePerTibByLocation ?? {}).map(
     ([location, price2]) => `${price2 === 0 ? "0 (bytes only)" : formatUsd(price2)} in ${location}`
@@ -46385,6 +46400,16 @@ function preOpsBlocker(sql, preOps) {
   const table = preOpsTempTableIn(sql, preOps);
   return table === void 0 ? void 0 : { preOpsTempTable: table };
 }
+function fullRefreshRun(model, runner) {
+  if (model?.incrementalQuery === void 0) return void 0;
+  if (preOpsBlocker(model.query, model.preOps ?? []) !== void 0) return void 0;
+  return runner.estimate(model.query, model.location);
+}
+function fullRebuildBytes(model, run, fullRefresh) {
+  if (model === void 0) return 0;
+  if (model.incrementalQuery === void 0) return "bytes" in run ? run.bytes : void 0;
+  return fullRefresh !== void 0 && "bytes" in fullRefresh ? fullRefresh.bytes : void 0;
+}
 function estimable(model) {
   return SKIP_REASONS[model.type] === void 0 ? model : void 0;
 }
@@ -46400,22 +46425,42 @@ async function estimateChange(change, runner, config, newTargets = /* @__PURE__ 
   if (base === void 0 && head === void 0) {
     return { status: "skipped", ...common, reason: SKIP_REASONS[model.type] ?? "Not estimated." };
   }
+  const baseModel = change.kind === "modified" ? change.base : model;
+  const involvesIncremental = base?.incrementalQuery !== void 0 || head?.incrementalQuery !== void 0;
+  const rebuild = (baseBytes, headBytes) => baseBytes === void 0 || headBytes === void 0 ? void 0 : {
+    baseBytes,
+    headBytes,
+    baseUsd: bytesToTib(baseBytes) * pricePerTibFor(baseModel, config),
+    headUsd: bytesToTib(headBytes) * pricePerTibFor(model, config)
+  };
   for (const side of [base, head]) {
     if (side === void 0) continue;
     const blocker = preOpsBlocker(steadyStateSql(side), steadyStatePreOps(side));
     if (blocker !== void 0) {
+      const blocked = { error: "blocked by pre_operations", errorKind: "unknown" };
+      const [baseFull, headFull] = await Promise.all([
+        fullRefreshRun(base, runner),
+        fullRefreshRun(head, runner)
+      ]);
+      const fullRefresh2 = rebuild(
+        fullRebuildBytes(base, blocked, baseFull),
+        fullRebuildBytes(head, blocked, headFull)
+      );
       return {
         status: "unestimable",
         ...common,
+        ...fullRefresh2 !== void 0 && { fullRefresh: fullRefresh2 },
+        ...involvesIncremental && { involvesIncremental },
         reason: "preOpsVariable" in blocker ? `Filters on \`${blocker.preOpsVariable}\`, a variable set in pre_operations, which a dry run cannot size.` : `Reads \`${blocker.preOpsTempTable}\`, a temp table created in pre_operations, which a dry run of the query alone cannot see.`,
         ...blocker
       };
     }
   }
-  const [baseResult, headResult, fullRefreshResult] = await Promise.all([
+  const [baseResult, headResult, fullRefreshResult, baseFullRefreshResult] = await Promise.all([
     base === void 0 ? { bytes: 0 } : runner.estimate(steadyStateSql(base), base.location),
     head === void 0 ? { bytes: 0 } : runner.estimate(steadyStateSql(head), head.location),
-    head?.incrementalQuery === void 0 || preOpsBlocker(head.query, head.preOps ?? []) !== void 0 ? void 0 : runner.estimate(head.query, head.location)
+    fullRefreshRun(head, runner),
+    fullRefreshRun(base, runner)
   ]);
   if ("error" in baseResult) {
     return { ...common, ...dryRunFailed("base", baseResult) };
@@ -46423,14 +46468,20 @@ async function estimateChange(change, runner, config, newTargets = /* @__PURE__ 
   if ("error" in headResult) {
     const upstream = head === void 0 ? void 0 : readsNewTarget(steadyStateSql(head), change.target, newTargets);
     if (change.kind === "added" && head?.incrementalQuery !== void 0 && steadyStateSql(head).includes(`\`${change.target}\``)) {
-      const firstRun = fullRefreshResult !== void 0 && "bytes" in fullRefreshResult ? ` Its first run, a full refresh, would scan up to ${formatBytes(fullRefreshResult.bytes)}.` : "";
+      const firstRun = rebuild(
+        0,
+        fullRefreshResult !== void 0 && "bytes" in fullRefreshResult ? fullRefreshResult.bytes : void 0
+      );
+      const firstRunText = fullRefreshResult !== void 0 && "bytes" in fullRefreshResult ? ` Its first run, a full refresh, would scan up to ${formatBytes(fullRefreshResult.bytes)}.` : "";
       return {
         status: "unestimable",
         ...common,
-        reason: `New incremental model: its incremental query reads its own table, which this pull request creates, so the monthly estimate waits until it exists.${firstRun}`,
+        reason: `New incremental model: its incremental query reads its own table, which this pull request creates, so the monthly estimate waits until it exists.${firstRunText}`,
         errorKind: headResult.errorKind,
         detail: headResult.error,
-        newUpstream: change.target
+        newUpstream: change.target,
+        involvesIncremental,
+        ...firstRun !== void 0 && { fullRefresh: firstRun }
       };
     }
     if (upstream !== void 0) {
@@ -46456,10 +46507,13 @@ async function estimateChange(change, runner, config, newTargets = /* @__PURE__ 
   }
   const runsPerDay = runsPerDayFor(model, config);
   const pricePerTib = pricePerTibFor(model, config);
-  const baseModel = change.kind === "modified" ? change.base : model;
   const baseRunsPerDay = runsPerDayFor(baseModel, config);
   const basePricePerTib = pricePerTibFor(baseModel, config);
   const likelyCause = partitionFilterCause(baseResult, headResult);
+  const fullRefresh = rebuild(
+    fullRebuildBytes(base, baseResult, baseFullRefreshResult),
+    fullRebuildBytes(head, headResult, fullRefreshResult)
+  );
   return {
     status: "estimated",
     ...common,
@@ -46473,7 +46527,9 @@ async function estimateChange(change, runner, config, newTargets = /* @__PURE__ 
     ...likelyCause !== void 0 && { likelyCause },
     ...head?.merge !== void 0 && { merge: head.merge },
     ...change.kind === "modified" && change.viaViews !== void 0 && { viaViews: change.viaViews },
-    ...fullRefreshResult !== void 0 && "bytes" in fullRefreshResult && { fullRefreshBytes: fullRefreshResult.bytes }
+    ...fullRefreshResult !== void 0 && "bytes" in fullRefreshResult && { fullRefreshBytes: fullRefreshResult.bytes },
+    ...fullRefresh !== void 0 && { fullRefresh },
+    ...involvesIncremental && { involvesIncremental }
   };
 }
 async function estimateChanges(changes, runner, config) {
@@ -46496,6 +46552,23 @@ function listPrices(estimates, config) {
   }
   return Object.keys(byLocation).length === 0 ? {} : { listPrices: { asOf: ON_DEMAND_PRICES_AS_OF, byLocation } };
 }
+function fullRefreshTotal(estimates) {
+  let baseUsd = 0;
+  let headUsd = 0;
+  let incremental = 0;
+  let leftOut = 0;
+  for (const e2 of estimates) {
+    if (e2.status === "skipped") continue;
+    if (e2.involvesIncremental === true) incremental++;
+    if (e2.fullRefresh === void 0) {
+      leftOut++;
+      continue;
+    }
+    baseUsd += e2.fullRefresh.baseUsd;
+    headUsd += e2.fullRefresh.headUsd;
+  }
+  return incremental === 0 ? {} : { fullRefresh: { baseUsd, headUsd, leftOut } };
+}
 function buildReport(estimates, config) {
   const sum = estimates.reduce(
     (total, e2) => e2.status === "estimated" ? total + e2.monthlyDelta : total,
@@ -46510,6 +46583,7 @@ function buildReport(estimates, config) {
       pricePerTibByLocation: config.pricePerTibByLocation
     },
     ...listPrices(estimates, config),
+    ...fullRefreshTotal(estimates),
     limitMonthly: config.limitMonthly,
     overLimit: exceedsLimit(totalMonthlyDelta, config.limitMonthly)
   };

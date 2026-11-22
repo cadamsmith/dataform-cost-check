@@ -181,7 +181,7 @@ describe("JavaScript-defined actions in the sample project", () => {
     expect(inc.query).not.toContain("checkpoint");
   });
 
-  it("reports the checkpoint incremental as not estimated, naming the variable, without a dry run", async () => {
+  it("reports the checkpoint incremental as not estimated, naming the variable, dry-running only its full refresh", async () => {
     const runner = new FakeDryRunner();
     const estimate = await estimateChange(
       modified(find("orders_by_customer")),
@@ -189,7 +189,10 @@ describe("JavaScript-defined actions in the sample project", () => {
       DEFAULT_CONFIG,
     );
     expect(estimate).toMatchObject({ status: "unestimable", preOpsVariable: "checkpoint" });
-    expect(runner.calls).toEqual([]);
+    // The incremental query (which needs the checkpoint) is never dry-run; the full
+    // refresh, which declares no checkpoint, is.
+    const inc = find("orders_by_customer");
+    expect(runner.calls.map((c) => c.sql)).toEqual([inc.query, inc.query]);
   });
 
   it("skips an operate() action like an SQLX operation", async () => {

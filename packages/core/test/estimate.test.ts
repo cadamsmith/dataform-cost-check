@@ -612,3 +612,181 @@ describe("preOpsTempTableIn", () => {
     expect(runner.calls).toEqual([]);
   });
 });
+
+describe("full refresh estimate", () => {
+  const TIB = BYTES_PER_TIB;
+  const inc = (name: string, full: string, incr: string) =>
+    model({ name, type: "incremental", query: full, incrementalQuery: incr });
+  const runner = new FakeDryRunner([
+    ["full-old", { bytes: 2 * TIB }],
+    ["full-new", { bytes: 3 * TIB }],
+    ["incr-old", { bytes: 1 }],
+    ["incr-new", { bytes: 2 }],
+    ["table-old", { bytes: TIB }],
+    ["table-new", { bytes: 4 * TIB }],
+  ]);
+
+  it("dry-runs both sides' full-refresh queries and prices one rebuild", async () => {
+    const base = inc("i", "full-old", "incr-old");
+    const head = inc("i", "full-new", "incr-new");
+    const e = await estimateChange(
+      { kind: "modified", target: base.target, base, head },
+      runner,
+      config,
+    );
+    expect(e).toMatchObject({
+      status: "estimated",
+      involvesIncremental: true,
+      fullRefresh: { baseBytes: 2 * TIB, headBytes: 3 * TIB, baseUsd: 12.5, headUsd: 18.75 },
+    });
+  });
+
+  it("totals tables and incrementals together, outside the monthly figure and the limit", async () => {
+    const i = { base: inc("i", "full-old", "incr-old"), head: inc("i", "full-new", "incr-new") };
+    const t = {
+      base: model({ name: "t", query: "table-old" }),
+      head: model({ name: "t", query: "table-new" }),
+    };
+    const report = await estimateChanges(
+      [
+        { kind: "modified", target: i.base.target, ...i },
+        { kind: "modified", target: t.base.target, ...t },
+      ],
+      runner,
+      { ...config, limitMonthly: 1000 },
+    );
+    expect(report.fullRefresh).toEqual({ baseUsd: 12.5 + 6.25, headUsd: 18.75 + 25, leftOut: 0 });
+    expect(report.totalMonthlyDelta).toBeCloseTo(3 * 6.25 * 30);
+    expect(report.overLimit).toBe(false);
+  });
+
+  it("leaves it out for tables alone, where it would repeat the per-run figures", async () => {
+    const base = model({ name: "t", query: "table-old" });
+    const head = model({ name: "t", query: "table-new" });
+    const report = await estimateChanges(
+      [{ kind: "modified", target: base.target, base, head }],
+      runner,
+      config,
+    );
+    expect(report).not.toHaveProperty("fullRefresh");
+  });
+
+  it("counts an incremental whose full refresh could not be sized", async () => {
+    const base = inc("i", "full-missing", "incr-old");
+    const head = inc("i", "full-new", "incr-new");
+    const other = {
+      base: inc("j", "full-old", "incr-old"),
+      head: inc("j", "full-new", "incr-new"),
+    };
+    const report = await estimateChanges(
+      [
+        { kind: "modified", target: base.target, base, head },
+        { kind: "modified", target: other.base.target, ...other },
+      ],
+      runner,
+      config,
+    );
+    expect(report.estimates[0]).toMatchObject({ status: "estimated" });
+    expect(report.estimates[0]).not.toHaveProperty("fullRefresh");
+    expect(report.fullRefresh).toEqual({ baseUsd: 12.5, headUsd: 18.75, leftOut: 1 });
+  });
+
+  it("counts a new incremental's first run", async () => {
+    const head = model({
+      name: "fresh",
+      type: "incremental",
+      query: "full-new",
+      incrementalQuery: "SELECT * FROM `proj.analytics.fresh`",
+    });
+    const report = await estimateChanges(
+      [{ kind: "added", target: head.target, head }],
+      runner,
+      config,
+    );
+    expect(report.estimates[0]).toMatchObject({
+      status: "unestimable",
+      fullRefresh: { baseBytes: 0, headBytes: 3 * TIB, headUsd: 18.75 },
+    });
+    expect(report.fullRefresh).toEqual({ baseUsd: 0, headUsd: 18.75, leftOut: 0 });
+  });
+});
+
+describe("full refresh estimate, nothing sized", () => {
+  it("still reports the incremental it could not size", async () => {
+    const base = model({ name: "i", type: "incremental", query: "gone", incrementalQuery: "a" });
+    const head = { ...base, incrementalQuery: "b" };
+    const runner = new FakeDryRunner([
+      ["a", { bytes: 1 }],
+      ["b", { bytes: 2 }],
+    ]);
+    const report = await estimateChanges(
+      [{ kind: "modified", target: base.target, base, head }],
+      runner,
+      config,
+    );
+    expect(report.fullRefresh).toEqual({ baseUsd: 0, headUsd: 0, leftOut: 1 });
+  });
+});
+
+describe("full refresh estimate, pre_operations", () => {
+  const TIB = BYTES_PER_TIB;
+  it("sizes a checkpoint incremental's full refresh, though its steady state is not estimated", async () => {
+    const preOps = ["DECLARE checkpoint DATE DEFAULT (SELECT MAX(d) FROM t)"];
+    const side = (full: string) =>
+      model({
+        name: "i",
+        type: "incremental",
+        query: full,
+        incrementalQuery: "SELECT * FROM s WHERE d > checkpoint",
+        incrementalPreOps: preOps,
+      });
+    const base = side("full-old");
+    const head = side("full-new");
+    const runner = new FakeDryRunner([
+      ["full-old", { bytes: TIB }],
+      ["full-new", { bytes: 2 * TIB }],
+    ]);
+    const report = await estimateChanges(
+      [{ kind: "modified", target: base.target, base, head }],
+      runner,
+      config,
+    );
+    expect(report.estimates[0]).toMatchObject({
+      status: "unestimable",
+      preOpsVariable: "checkpoint",
+    });
+    expect(report.fullRefresh).toEqual({ baseUsd: 6.25, headUsd: 12.5, leftOut: 0 });
+  });
+
+  it("counts a model that reads a temp table as left out of the rebuild", async () => {
+    const temp = model({
+      name: "scoped",
+      query: "SELECT * FROM o JOIN scope USING (id)",
+      preOps: ["CREATE TEMP TABLE scope AS SELECT 1 AS id"],
+    });
+    const inc = {
+      base: model({ name: "i", type: "incremental", query: "full-old", incrementalQuery: "a" }),
+      head: model({ name: "i", type: "incremental", query: "full-new", incrementalQuery: "b" }),
+    };
+    const runner = new FakeDryRunner([
+      ["full-old", { bytes: TIB }],
+      ["full-new", { bytes: TIB }],
+      ["a", { bytes: 1 }],
+      ["b", { bytes: 1 }],
+    ]);
+    const report = await estimateChanges(
+      [
+        { kind: "modified", target: inc.base.target, ...inc },
+        {
+          kind: "modified",
+          target: temp.target,
+          base: temp,
+          head: { ...temp, query: `${temp.query} -- x` },
+        },
+      ],
+      runner,
+      config,
+    );
+    expect(report.fullRefresh).toEqual({ baseUsd: 6.25, headUsd: 6.25, leftOut: 1 });
+  });
+});

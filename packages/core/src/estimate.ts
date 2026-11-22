@@ -1,4 +1,5 @@
 import {
+  bytesToTib,
   exceedsLimit,
   listPriceFor,
   monthlyCost,
@@ -132,6 +133,31 @@ function preOpsBlocker(
   return table === undefined ? undefined : { preOpsTempTable: table };
 }
 
+/** A dry run of an incremental model's full-refresh query, unless pre-operations block it. */
+function fullRefreshRun(
+  model: Model | undefined,
+  runner: DryRunner,
+): Promise<DryRunResult> | undefined {
+  if (model?.incrementalQuery === undefined) return undefined;
+  if (preOpsBlocker(model.query, model.preOps ?? []) !== undefined) return undefined;
+  return runner.estimate(model.query, model.location);
+}
+
+/**
+ * Bytes one full rebuild of a side reads: 0 when the side does not exist or is not
+ * estimated (a view), its normal run for a table or assertion, its full-refresh query for
+ * an incremental. Undefined when that full refresh could not be sized.
+ */
+function fullRebuildBytes(
+  model: Model | undefined,
+  run: DryRunResult,
+  fullRefresh: DryRunResult | undefined,
+): number | undefined {
+  if (model === undefined) return 0;
+  if (model.incrementalQuery === undefined) return "bytes" in run ? run.bytes : undefined;
+  return fullRefresh !== undefined && "bytes" in fullRefresh ? fullRefresh.bytes : undefined;
+}
+
 function estimable(model: Model): Model | undefined {
   return SKIP_REASONS[model.type] === undefined ? model : undefined;
 }
@@ -172,13 +198,40 @@ export async function estimateChange(
     return { status: "skipped", ...common, reason: SKIP_REASONS[model.type] ?? "Not estimated." };
   }
 
+  const baseModel = change.kind === "modified" ? change.base : model;
+  const involvesIncremental =
+    base?.incrementalQuery !== undefined || head?.incrementalQuery !== undefined;
+  /** One rebuild of both sides, priced each at its own price; undefined if either is unsized. */
+  const rebuild = (baseBytes: number | undefined, headBytes: number | undefined) =>
+    baseBytes === undefined || headBytes === undefined
+      ? undefined
+      : {
+          baseBytes,
+          headBytes,
+          baseUsd: bytesToTib(baseBytes) * pricePerTibFor(baseModel, config),
+          headUsd: bytesToTib(headBytes) * pricePerTibFor(model, config),
+        };
+
   for (const side of [base, head]) {
     if (side === undefined) continue;
     const blocker = preOpsBlocker(steadyStateSql(side), steadyStatePreOps(side));
     if (blocker !== undefined) {
+      // The steady-state query cannot be dry-run, but an incremental's full-refresh query
+      // often can (a checkpoint is declared only for incremental runs).
+      const blocked: DryRunResult = { error: "blocked by pre_operations", errorKind: "unknown" };
+      const [baseFull, headFull] = await Promise.all([
+        fullRefreshRun(base, runner),
+        fullRefreshRun(head, runner),
+      ]);
+      const fullRefresh = rebuild(
+        fullRebuildBytes(base, blocked, baseFull),
+        fullRebuildBytes(head, blocked, headFull),
+      );
       return {
         status: "unestimable",
         ...common,
+        ...(fullRefresh !== undefined && { fullRefresh }),
+        ...(involvesIncremental && { involvesIncremental }),
         reason:
           "preOpsVariable" in blocker
             ? `Filters on \`${blocker.preOpsVariable}\`, a variable set in pre_operations, which a dry run cannot size.`
@@ -188,13 +241,11 @@ export async function estimateChange(
     }
   }
 
-  const [baseResult, headResult, fullRefreshResult] = await Promise.all([
+  const [baseResult, headResult, fullRefreshResult, baseFullRefreshResult] = await Promise.all([
     base === undefined ? { bytes: 0 } : runner.estimate(steadyStateSql(base), base.location),
     head === undefined ? { bytes: 0 } : runner.estimate(steadyStateSql(head), head.location),
-    head?.incrementalQuery === undefined ||
-    preOpsBlocker(head.query, head.preOps ?? []) !== undefined
-      ? undefined
-      : runner.estimate(head.query, head.location),
+    fullRefreshRun(head, runner),
+    fullRefreshRun(base, runner),
   ]);
 
   if ("error" in baseResult) {
@@ -212,17 +263,25 @@ export async function estimateChange(
     ) {
       // A new incremental model's incremental query reads its own table, which does not
       // exist yet. Its first run is a full refresh, which can be sized.
-      const firstRun =
+      const firstRun = rebuild(
+        0,
+        fullRefreshResult !== undefined && "bytes" in fullRefreshResult
+          ? fullRefreshResult.bytes
+          : undefined,
+      );
+      const firstRunText =
         fullRefreshResult !== undefined && "bytes" in fullRefreshResult
           ? ` Its first run, a full refresh, would scan up to ${formatBytes(fullRefreshResult.bytes)}.`
           : "";
       return {
         status: "unestimable",
         ...common,
-        reason: `New incremental model: its incremental query reads its own table, which this pull request creates, so the monthly estimate waits until it exists.${firstRun}`,
+        reason: `New incremental model: its incremental query reads its own table, which this pull request creates, so the monthly estimate waits until it exists.${firstRunText}`,
         errorKind: headResult.errorKind,
         detail: headResult.error,
         newUpstream: change.target,
+        involvesIncremental,
+        ...(firstRun !== undefined && { fullRefresh: firstRun }),
       };
     }
     if (upstream !== undefined) {
@@ -253,10 +312,13 @@ export async function estimateChange(
   // even when the bytes do not.
   const runsPerDay = runsPerDayFor(model, config);
   const pricePerTib = pricePerTibFor(model, config);
-  const baseModel = change.kind === "modified" ? change.base : model;
   const baseRunsPerDay = runsPerDayFor(baseModel, config);
   const basePricePerTib = pricePerTibFor(baseModel, config);
   const likelyCause = partitionFilterCause(baseResult, headResult);
+  const fullRefresh = rebuild(
+    fullRebuildBytes(base, baseResult, baseFullRefreshResult),
+    fullRebuildBytes(head, headResult, fullRefreshResult),
+  );
   return {
     status: "estimated",
     ...common,
@@ -275,6 +337,8 @@ export async function estimateChange(
       change.viaViews !== undefined && { viaViews: change.viaViews }),
     ...(fullRefreshResult !== undefined &&
       "bytes" in fullRefreshResult && { fullRefreshBytes: fullRefreshResult.bytes }),
+    ...(fullRefresh !== undefined && { fullRefresh }),
+    ...(involvesIncremental && { involvesIncremental }),
   };
 }
 
@@ -317,6 +381,30 @@ function listPrices(estimates: readonly Estimate[], config: Config): Pick<Report
     : { listPrices: { asOf: ON_DEMAND_PRICES_AS_OF, byLocation } };
 }
 
+/**
+ * One full rebuild of the changed models, before and after, when an incremental model is
+ * among them (for tables alone it would repeat the per-run figures). Never part of the
+ * monthly total or the limit. Counts the changed models whose rebuild could not be sized
+ * (a failed dry run, a temp table in pre-operations), so it never undercounts silently.
+ */
+function fullRefreshTotal(estimates: readonly Estimate[]): Pick<Report, "fullRefresh"> {
+  let baseUsd = 0;
+  let headUsd = 0;
+  let incremental = 0;
+  let leftOut = 0;
+  for (const e of estimates) {
+    if (e.status === "skipped") continue;
+    if (e.involvesIncremental === true) incremental++;
+    if (e.fullRefresh === undefined) {
+      leftOut++;
+      continue;
+    }
+    baseUsd += e.fullRefresh.baseUsd;
+    headUsd += e.fullRefresh.headUsd;
+  }
+  return incremental === 0 ? {} : { fullRefresh: { baseUsd, headUsd, leftOut } };
+}
+
 /** Total the estimates and apply the limit. Pure. */
 export function buildReport(estimates: readonly Estimate[], config: Config): Report {
   const sum = estimates.reduce(
@@ -334,6 +422,7 @@ export function buildReport(estimates: readonly Estimate[], config: Config): Rep
       pricePerTibByLocation: config.pricePerTibByLocation,
     }),
     ...listPrices(estimates, config),
+    ...fullRefreshTotal(estimates),
     limitMonthly: config.limitMonthly,
     overLimit: exceedsLimit(totalMonthlyDelta, config.limitMonthly),
   };

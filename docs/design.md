@@ -101,7 +101,18 @@ reports "not estimated" with a reason.
   Estimate the incremental one as steady state (`core.steadyStateSql`); mention the
   full-refresh estimate separately. The full-refresh query of the head version gets its own dry
   run (`Estimate.fullRefreshBytes`), shown as a note and never added to the monthly figure.
-  If only that dry run fails, the note is left out and the estimate stands. A newly added incremental model's incremental query reads its own table, which does not
+  If only that dry run fails, the note is left out and the estimate stands.
+  **Full refresh line.** Teams that rebuild from scratch (for example, after fixing data)
+  pay for full refreshes outside any schedule. When an incremental model is among the
+  changes, the comment adds one line: one rebuild of the changed models, in dollars, before
+  and after (`Report.fullRefresh`). Tables and assertions count at their normal query,
+  incrementals at their full-refresh query (base gets its own dry run too), a new
+  incremental at its first run, views at 0; each side at its own price. An incremental whose
+  pre-operations block only its incremental query (a declared checkpoint) still gets its
+  full refresh sized. Never added to the monthly figure or the limit. Changed models whose
+  rebuild could not be sized (a failed dry run, a temp table in pre-operations) are counted
+  as left out, never silently dropped. For tables alone the line would repeat the per-run
+  figures, so it is not shown. Chosen 2026-11-22. A newly added incremental model's incremental query reads its own table, which does not
   exist yet, so it gets no monthly estimate; the comment says so and gives its first run, the
   full refresh, in bytes. It is left out of the "every dry run fails" count (#38).
 - **Unique-key incremental models.** With a `uniqueKey`, each run is a MERGE into the

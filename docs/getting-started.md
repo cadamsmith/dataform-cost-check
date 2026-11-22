@@ -147,6 +147,8 @@ partitioned table in a copy of a model. Within a minute or two the job posts one
 updates it on every push:
 
 - a headline: the estimated monthly change, and whether it is within your limit;
+- when incremental models change, a **Full refresh** line: one rebuild of the changed models
+  from scratch, before and after, kept out of the monthly figure;
 - a table of changed models, with bytes scanned per run before and after;
 - notes: a removed partition filter named as the likely cause, a changed view's readers
   re-estimated, merge-style models flagged as lower bounds;

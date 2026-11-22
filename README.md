@@ -71,6 +71,8 @@ count for each, and posts one sticky comment. A fuller example, with every secti
 - Sticky pull request comment with the total monthly estimate change (none on pull requests
   that change no models)
 - Bytes scanned before and after, per changed model
+- When incremental models change: what one full refresh of the changed models would read,
+  before and after, for teams that rebuild from scratch. Kept out of the monthly figure
 - Flags the most common cause of a jump: a lost partition filter
 - One configurable spending limit that can fail the check
 - Last refresh duration (and slot-hours, for slot-based pricing) per table, shown as history

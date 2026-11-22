@@ -132,6 +132,10 @@ export type Estimate =
        * run failed.
        */
       readonly fullRefreshBytes?: number;
+      /** One full rebuild of this model, before and after. Absent when it could not be sized. */
+      readonly fullRefresh?: FullRefresh;
+      /** True when either side is an incremental model. */
+      readonly involvesIncremental?: boolean;
       /** The changed views this model reads, when that is the only reason it is listed. */
       readonly viaViews?: readonly string[];
       /**
@@ -179,7 +183,21 @@ export type Estimate =
        * exists only inside Dataform's script, so the query alone is not dry-run.
        */
       readonly preOpsTempTable?: string;
+      /** A new incremental model: its first run, a full refresh, when it could be sized. */
+      readonly fullRefresh?: FullRefresh;
     };
+
+/**
+ * One full rebuild of a model from scratch, before and after: the full-refresh query for
+ * an incremental, the normal query otherwise. Each side at its own price. Never part of
+ * the monthly figure.
+ */
+export interface FullRefresh {
+  readonly baseBytes: number;
+  readonly headBytes: number;
+  readonly baseUsd: number;
+  readonly headUsd: number;
+}
 
 /** User configuration, normally read from `dataform-cost-check.yml`. */
 export interface Config {
@@ -251,6 +269,16 @@ export interface Report {
   readonly listPrices?: {
     readonly asOf: string;
     readonly byLocation: Readonly<Record<string, number>>;
+  };
+  /**
+   * One full rebuild of the changed models, when an incremental model is among them. Not
+   * part of `totalMonthlyDelta` or the limit. `leftOut` counts incremental models whose
+   * full refresh could not be sized.
+   */
+  readonly fullRefresh?: {
+    readonly baseUsd: number;
+    readonly headUsd: number;
+    readonly leftOut: number;
   };
   readonly limitMonthly: number | null;
   readonly overLimit: boolean;

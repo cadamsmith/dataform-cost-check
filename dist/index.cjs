@@ -46143,6 +46143,8 @@ function renderComment(report, {
     ].join("\n") + "\n";
   }
   head.push(headline(report), "");
+  const rebuild = fullRefreshLine(report);
+  if (rebuild !== void 0) head.push(rebuild, "");
   const estimated = report.estimates.filter((e2) => e2.status === "estimated").sort(byImpact);
   const notEstimated = report.estimates.filter((e2) => e2.status !== "estimated");
   const body = [];
@@ -46285,6 +46287,19 @@ function headline(report) {
   }
   return text;
 }
+function fullRefreshLine(report) {
+  const f3 = report.fullRefresh;
+  if (f3 === void 0) return void 0;
+  if (f3.baseUsd === 0 && f3.headUsd === 0) {
+    if (f3.leftOut === 0) return void 0;
+    const models = f3.leftOut === 1 ? "1 incremental model" : `${String(f3.leftOut)} incremental models`;
+    return `**Full refresh:** could not be sized for ${models} in this change.`;
+  }
+  const delta = f3.headUsd - f3.baseUsd;
+  const change = Math.abs(delta) < 1e-9 ? "no change" : formatUsd(delta, { signed: true });
+  const leftOut = f3.leftOut === 0 ? "" : f3.leftOut === 1 ? " 1 incremental model is left out: its full refresh could not be sized." : ` ${String(f3.leftOut)} incremental models are left out: their full refresh could not be sized.`;
+  return `**Full refresh:** rebuilding the changed models from scratch reads an estimated ${formatUsd(f3.baseUsd)} \u2192 ${formatUsd(f3.headUsd)} per rebuild (${change}), not part of the monthly figure.${leftOut}`;
+}
 function footer(report, configPath, configFound) {
   const byLocation = Object.entries(report.pricePerTibByLocation ?? {}).map(
     ([location, price2]) => `${price2 === 0 ? "0 (bytes only)" : formatUsd(price2)} in ${location}`
@@ -46385,6 +46400,16 @@ function preOpsBlocker(sql, preOps) {
   const table = preOpsTempTableIn(sql, preOps);
   return table === void 0 ? void 0 : { preOpsTempTable: table };
 }
+function fullRefreshRun(model, runner) {
+  if (model?.incrementalQuery === void 0) return void 0;
+  if (preOpsBlocker(model.query, model.preOps ?? []) !== void 0) return void 0;
+  return runner.estimate(model.query, model.location);
+}
+function fullRebuildBytes(model, run, fullRefresh) {
+  if (model === void 0) return 0;
+  if (model.incrementalQuery === void 0) return "bytes" in run ? run.bytes : void 0;
+  return fullRefresh !== void 0 && "bytes" in fullRefresh ? fullRefresh.bytes : void 0;
+}
 function estimable(model) {
   return SKIP_REASONS[model.type] === void 0 ? model : void 0;
 }
@@ -46412,11 +46437,13 @@ async function estimateChange(change, runner, config, newTargets = /* @__PURE__ 
       };
     }
   }
-  const [baseResult, headResult, fullRefreshResult] = await Promise.all([
+  const [baseResult, headResult, fullRefreshResult, baseFullRefreshResult] = await Promise.all([
     base === void 0 ? { bytes: 0 } : runner.estimate(steadyStateSql(base), base.location),
     head === void 0 ? { bytes: 0 } : runner.estimate(steadyStateSql(head), head.location),
-    head?.incrementalQuery === void 0 || preOpsBlocker(head.query, head.preOps ?? []) !== void 0 ? void 0 : runner.estimate(head.query, head.location)
+    fullRefreshRun(head, runner),
+    fullRefreshRun(base, runner)
   ]);
+  const involvesIncremental = base?.incrementalQuery !== void 0 || head?.incrementalQuery !== void 0;
   if ("error" in baseResult) {
     return { ...common, ...dryRunFailed("base", baseResult) };
   }
@@ -46430,7 +46457,15 @@ async function estimateChange(change, runner, config, newTargets = /* @__PURE__ 
         reason: `New incremental model: its incremental query reads its own table, which this pull request creates, so the monthly estimate waits until it exists.${firstRun}`,
         errorKind: headResult.errorKind,
         detail: headResult.error,
-        newUpstream: change.target
+        newUpstream: change.target,
+        ...fullRefreshResult !== void 0 && "bytes" in fullRefreshResult && {
+          fullRefresh: {
+            baseBytes: 0,
+            headBytes: fullRefreshResult.bytes,
+            baseUsd: 0,
+            headUsd: bytesToTib(fullRefreshResult.bytes) * pricePerTibFor(model, config)
+          }
+        }
       };
     }
     if (upstream !== void 0) {
@@ -46460,6 +46495,14 @@ async function estimateChange(change, runner, config, newTargets = /* @__PURE__ 
   const baseRunsPerDay = runsPerDayFor(baseModel, config);
   const basePricePerTib = pricePerTibFor(baseModel, config);
   const likelyCause = partitionFilterCause(baseResult, headResult);
+  const baseRebuild = fullRebuildBytes(base, baseResult, baseFullRefreshResult);
+  const headRebuild = fullRebuildBytes(head, headResult, fullRefreshResult);
+  const fullRefresh = baseRebuild === void 0 || headRebuild === void 0 ? void 0 : {
+    baseBytes: baseRebuild,
+    headBytes: headRebuild,
+    baseUsd: bytesToTib(baseRebuild) * basePricePerTib,
+    headUsd: bytesToTib(headRebuild) * pricePerTib
+  };
   return {
     status: "estimated",
     ...common,
@@ -46473,7 +46516,9 @@ async function estimateChange(change, runner, config, newTargets = /* @__PURE__ 
     ...likelyCause !== void 0 && { likelyCause },
     ...head?.merge !== void 0 && { merge: head.merge },
     ...change.kind === "modified" && change.viaViews !== void 0 && { viaViews: change.viaViews },
-    ...fullRefreshResult !== void 0 && "bytes" in fullRefreshResult && { fullRefreshBytes: fullRefreshResult.bytes }
+    ...fullRefreshResult !== void 0 && "bytes" in fullRefreshResult && { fullRefreshBytes: fullRefreshResult.bytes },
+    ...fullRefresh !== void 0 && { fullRefresh },
+    ...involvesIncremental && { involvesIncremental }
   };
 }
 async function estimateChanges(changes, runner, config) {
@@ -46496,6 +46541,24 @@ function listPrices(estimates, config) {
   }
   return Object.keys(byLocation).length === 0 ? {} : { listPrices: { asOf: ON_DEMAND_PRICES_AS_OF, byLocation } };
 }
+function fullRefreshTotal(estimates) {
+  let baseUsd = 0;
+  let headUsd = 0;
+  let incremental = 0;
+  let leftOut = 0;
+  for (const e2 of estimates) {
+    if (e2.status === "skipped") continue;
+    const isIncremental = e2.status === "estimated" ? e2.involvesIncremental === true : e2.fullRefresh !== void 0;
+    if (e2.fullRefresh === void 0) {
+      if (e2.status === "estimated" && isIncremental) leftOut++;
+      continue;
+    }
+    baseUsd += e2.fullRefresh.baseUsd;
+    headUsd += e2.fullRefresh.headUsd;
+    if (isIncremental) incremental++;
+  }
+  return incremental + leftOut === 0 ? {} : { fullRefresh: { baseUsd, headUsd, leftOut } };
+}
 function buildReport(estimates, config) {
   const sum = estimates.reduce(
     (total, e2) => e2.status === "estimated" ? total + e2.monthlyDelta : total,
@@ -46510,6 +46573,7 @@ function buildReport(estimates, config) {
       pricePerTibByLocation: config.pricePerTibByLocation
     },
     ...listPrices(estimates, config),
+    ...fullRefreshTotal(estimates),
     limitMonthly: config.limitMonthly,
     overLimit: exceedsLimit(totalMonthlyDelta, config.limitMonthly)
   };

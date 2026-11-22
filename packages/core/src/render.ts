@@ -90,6 +90,8 @@ export function renderComment(
     );
   }
   head.push(headline(report), "");
+  const rebuild = fullRefreshLine(report);
+  if (rebuild !== undefined) head.push(rebuild, "");
 
   const estimated = report.estimates
     .filter((e): e is Estimated => e.status === "estimated")
@@ -278,6 +280,34 @@ function headline(report: Report): string {
     text += ` ${models} priced at 0 per TiB and left out of the dollar figure; bytes are shown for them.`;
   }
   return text;
+}
+
+/**
+ * What one full refresh of the changed models would scan, in dollars, before and after.
+ * Teams that rebuild from scratch (after fixing data, for example) pay this each time.
+ */
+function fullRefreshLine(report: Report): string | undefined {
+  const f = report.fullRefresh;
+  if (f === undefined) return undefined;
+  if (f.baseUsd === 0 && f.headUsd === 0) {
+    if (f.leftOut === 0) return undefined;
+    const models =
+      f.leftOut === 1 ? "1 incremental model" : `${String(f.leftOut)} incremental models`;
+    return `**Full refresh:** could not be sized for ${models} in this change.`;
+  }
+  const delta = f.headUsd - f.baseUsd;
+  const change = Math.abs(delta) < 1e-9 ? "no change" : formatUsd(delta, { signed: true });
+  const leftOut =
+    f.leftOut === 0
+      ? ""
+      : f.leftOut === 1
+        ? " 1 incremental model is left out: its full refresh could not be sized."
+        : ` ${String(f.leftOut)} incremental models are left out: their full refresh could not be sized.`;
+  return (
+    `**Full refresh:** rebuilding the changed models from scratch reads an estimated ` +
+    `${formatUsd(f.baseUsd)} → ${formatUsd(f.headUsd)} per rebuild (${change}), ` +
+    `not part of the monthly figure.${leftOut}`
+  );
 }
 
 function footer(report: Report, configPath: string, configFound: boolean): string {

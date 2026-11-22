@@ -49,6 +49,10 @@ export interface RenderOptions {
   readonly fullReportAt?: string;
   /** The Dataform project's directory, for repositories with several projects. */
   readonly projectDir?: string;
+  /** The config file the runs per day come from, as the reader would look for it. */
+  readonly configPath?: string;
+  /** False when no config file was found and the defaults were used. */
+  readonly configFound?: boolean;
 }
 
 /**
@@ -63,12 +67,14 @@ export function renderComment(
     maxLength = COMMENT_MAX_LENGTH,
     fullReportAt = "The job summary has the full report.",
     projectDir = ".",
+    configPath = "dataform-cost-check.yml",
+    configFound = true,
   }: RenderOptions = {},
 ): string {
   const dir = normalizeDir(projectDir);
   const title = `### Dataform Cost Check: BigQuery estimate${dir === "" ? "" : ` for \`${dir}\``}`;
   const head = [commentMarker(projectDir), title, ""];
-  const tail = footer(report);
+  const tail = footer(report, configPath, configFound);
 
   if (report.estimates.length === 0) {
     return (
@@ -261,7 +267,7 @@ function headline(report: Report): string {
   return text;
 }
 
-function footer(report: Report): string {
+function footer(report: Report, configPath: string, configFound: boolean): string {
   const byLocation = Object.entries(report.pricePerTibByLocation ?? {}).map(
     ([location, price]) => `${price === 0 ? "0 (bytes only)" : formatUsd(price)} in ${location}`,
   );
@@ -278,11 +284,13 @@ function footer(report: Report): string {
         )
           .map(([location, p]) => `${formatUsd(p)} per TiB in ${location}`)
           .join(", ")}; otherwise ${own})`;
+  const runs = configFound
+    ? `Runs per day come from \`${configPath}\`, not from your schedules.`
+    : `No \`${configPath}\` found, so every model is assumed to run once a day and no limit applies.`;
   return [
     `<sub>Estimates are upper bounds from BigQuery dry runs, priced at ${price}, `,
-    "with no free-tier deduction. Runs per day come from `dataform-cost-check.yml`, not from your ",
-    "schedules. If this project uses slot-based (Editions) pricing, bytes scanned ",
-    "do not map to dollars and these figures do not apply.</sub>",
+    `with no free-tier deduction. ${runs} If this project uses slot-based (Editions) pricing, `,
+    "bytes scanned do not map to dollars and these figures do not apply.</sub>",
   ].join("");
 }
 

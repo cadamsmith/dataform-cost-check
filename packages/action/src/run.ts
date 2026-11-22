@@ -14,6 +14,10 @@ export interface RunDeps {
   readonly runner: DryRunner;
   /** The `project-dir` input, so each Dataform project in a repository keeps its own comment. */
   readonly projectDir?: string;
+  /** The `config-path` input, named in the comment's footer. */
+  readonly configPath?: string;
+  /** False when the config file was missing and `config` holds the defaults. */
+  readonly configFound?: boolean;
   /** Reads the changed models' last runs; called only when `config.history` is on. */
   readonly readHistory?: (targets: readonly string[]) => Promise<RefreshHistory>;
 }
@@ -40,16 +44,20 @@ export async function runCheck(deps: RunDeps): Promise<RunResult> {
     deps.config.history === true && deps.readHistory !== undefined && estimated.estimates.length > 0
       ? { ...estimated, history: await deps.readHistory(estimated.estimates.map((e) => e.target)) }
       : estimated;
-  const projectDir = deps.projectDir ?? ".";
+  const shared = {
+    projectDir: deps.projectDir ?? ".",
+    ...(deps.configPath === undefined ? {} : { configPath: deps.configPath }),
+    ...(deps.configFound === undefined ? {} : { configFound: deps.configFound }),
+  };
   return {
     report,
-    comment: renderComment(report, { projectDir }),
+    comment: renderComment(report, shared),
     summary: renderComment(report, {
+      ...shared,
       maxLength: SUMMARY_MAX_LENGTH,
       fullReportAt: "The job log has the full report.",
-      projectDir,
     }),
-    full: renderComment(report, { maxLength: Number.POSITIVE_INFINITY, projectDir }),
+    full: renderComment(report, { ...shared, maxLength: Number.POSITIVE_INFINITY }),
   };
 }
 

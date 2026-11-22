@@ -45122,7 +45122,6 @@ var require_dist3 = __commonJS({
 });
 
 // src/main.ts
-var import_node_fs4 = require("node:fs");
 var import_node_path4 = require("node:path");
 
 // ../../node_modules/.pnpm/@actions+core@3.0.1/node_modules/@actions/core/lib/command.js
@@ -46102,12 +46101,14 @@ var OVERFLOW_RESERVE = 200;
 function renderComment(report, {
   maxLength = COMMENT_MAX_LENGTH,
   fullReportAt = "The job summary has the full report.",
-  projectDir = "."
+  projectDir = ".",
+  configPath = "dataform-cost-check.yml",
+  configFound = true
 } = {}) {
   const dir = normalizeDir(projectDir);
   const title = `### Dataform Cost Check: BigQuery estimate${dir === "" ? "" : ` for \`${dir}\``}`;
   const head = [commentMarker(projectDir), title, ""];
-  const tail = footer(report);
+  const tail = footer(report, configPath, configFound);
   if (report.estimates.length === 0) {
     return [
       ...head,
@@ -46253,7 +46254,7 @@ function headline(report) {
   }
   return text;
 }
-function footer(report) {
+function footer(report, configPath, configFound) {
   const byLocation = Object.entries(report.pricePerTibByLocation ?? {}).map(
     ([location, price2]) => `${price2 === 0 ? "0 (bytes only)" : formatUsd(price2)} in ${location}`
   );
@@ -46262,11 +46263,11 @@ function footer(report) {
   const price = list === void 0 ? own : `Google's on-demand list price for each location as of ${list.asOf} (${Object.entries(
     list.byLocation
   ).map(([location, p]) => `${formatUsd(p)} per TiB in ${location}`).join(", ")}; otherwise ${own})`;
+  const runs = configFound ? `Runs per day come from \`${configPath}\`, not from your schedules.` : `No \`${configPath}\` found, so every model is assumed to run once a day and no limit applies.`;
   return [
     `<sub>Estimates are upper bounds from BigQuery dry runs, priced at ${price}, `,
-    "with no free-tier deduction. Runs per day come from `dataform-cost-check.yml`, not from your ",
-    "schedules. If this project uses slot-based (Editions) pricing, bytes scanned ",
-    "do not map to dollars and these figures do not apply.</sub>"
+    `with no free-tier deduction. ${runs} If this project uses slot-based (Editions) pricing, `,
+    "bytes scanned do not map to dollars and these figures do not apply.</sub>"
   ].join("");
 }
 function perTib(price) {
@@ -46677,7 +46678,22 @@ async function copyDependencies(headProject, baseProject) {
 }
 
 // src/config.ts
+var import_node_fs4 = require("node:fs");
 var import_yaml = __toESM(require_dist3(), 1);
+var DEFAULT_CONFIG_PATH = "dataform-cost-check.yml";
+function loadConfig(path, fs4 = {
+  existsSync: import_node_fs4.existsSync,
+  readFileSync: import_node_fs4.readFileSync
+}) {
+  if (fs4.existsSync(path))
+    return { config: parseConfig(fs4.readFileSync(path, "utf8")), found: true };
+  if (path !== DEFAULT_CONFIG_PATH) {
+    throw new Error(
+      `config-path is set to ${path}, but there is no such file (paths are relative to the repository root).`
+    );
+  }
+  return { config: DEFAULT_CONFIG, found: false };
+}
 function parseConfig(text) {
   const raw = (0, import_yaml.parse)(text) ?? {};
   if (!isRecord(raw)) throw new ConfigError("the config must be a YAML mapping");
@@ -46817,16 +46833,20 @@ async function runCheck(deps) {
   const changes = withViewReaders(diffModels(base, head), base, head);
   const estimated = await estimateChanges(changes, deps.runner, deps.config);
   const report = deps.config.history === true && deps.readHistory !== void 0 && estimated.estimates.length > 0 ? { ...estimated, history: await deps.readHistory(estimated.estimates.map((e2) => e2.target)) } : estimated;
-  const projectDir = deps.projectDir ?? ".";
+  const shared = {
+    projectDir: deps.projectDir ?? ".",
+    ...deps.configPath === void 0 ? {} : { configPath: deps.configPath },
+    ...deps.configFound === void 0 ? {} : { configFound: deps.configFound }
+  };
   return {
     report,
-    comment: renderComment(report, { projectDir }),
+    comment: renderComment(report, shared),
     summary: renderComment(report, {
+      ...shared,
       maxLength: SUMMARY_MAX_LENGTH,
-      fullReportAt: "The job log has the full report.",
-      projectDir
+      fullReportAt: "The job log has the full report."
     }),
-    full: renderComment(report, { maxLength: Number.POSITIVE_INFINITY, projectDir })
+    full: renderComment(report, { ...shared, maxLength: Number.POSITIVE_INFINITY })
   };
 }
 function dryRunFailure(report) {
@@ -46864,7 +46884,7 @@ async function main() {
     await summary.addRaw(note).write();
     return;
   }
-  const configPath = getInput("config-path") || "dataform-cost-check.yml";
+  const configPath = getInput("config-path") || DEFAULT_CONFIG_PATH;
   const projectDir = getInput("project-dir") || ".";
   const projectId = getInput("project-id") || process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || process.env.CLOUDSDK_CORE_PROJECT;
   if (!projectId) {
@@ -46874,8 +46894,12 @@ async function main() {
   }
   const baseRef = await resolveBaseRef(getInput("base-ref"), process.env.GITHUB_EVENT_PATH);
   info(`Dataform Cost Check 0.3.1 (alpha). Base: ${baseRef}. Dry runs in: ${projectId}.`);
-  const config = (0, import_node_fs4.existsSync)(configPath) ? parseConfig((0, import_node_fs4.readFileSync)(configPath, "utf8")) : DEFAULT_CONFIG;
-  if (!(0, import_node_fs4.existsSync)(configPath)) info(`No ${configPath} found; using defaults.`);
+  const { config, found: configFound } = loadConfig(configPath);
+  if (!configFound) {
+    notice(
+      `No ${configPath} found, so every model is assumed to run once a day and no limit applies.`
+    );
+  }
   const overrides = {
     defaultDatabase: getInput("default-database"),
     defaultSchema: getInput("default-schema"),
@@ -46894,6 +46918,8 @@ async function main() {
     config,
     loadModels: load,
     projectDir,
+    configPath,
+    configFound,
     runner: limitConcurrency(new BigQueryDryRunner({ projectId }), MAX_CONCURRENT_DRY_RUNS),
     // Opt-in (`history: true`): job records of the dry-run project, where Dataform runs.
     readHistory: (targets) => readRefreshHistory(targets, { projectId, getAccessToken: applicationDefaultToken() })

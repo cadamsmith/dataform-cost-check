@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { DEFAULT_CONFIG } from "@dataform-cost-check/core";
 import { describe, expect, it } from "vitest";
-import { ConfigError, parseConfig } from "../src/config.ts";
+import { ConfigError, loadConfig, parseConfig } from "../src/config.ts";
 
 describe("parseConfig", () => {
   it("reads the documented example", () => {
@@ -64,5 +64,31 @@ describe("history", () => {
     expect(parseConfig("price_per_tib: 6.25").history).toBeUndefined();
     expect(parseConfig("history: true").history).toBe(true);
     expect(() => parseConfig("history: yes please")).toThrow(/history must be true or false/);
+  });
+});
+
+describe("loadConfig", () => {
+  const fs = (files: Record<string, string>) => ({
+    existsSync: (p: string) => p in files,
+    readFileSync: (p: string) => files[p] ?? "",
+  });
+
+  it("reads the file when it exists", () => {
+    const { config, found } = loadConfig("ci/cost.yml", fs({ "ci/cost.yml": "limit_monthly: 5" }));
+    expect(found).toBe(true);
+    expect(config.limitMonthly).toBe(5);
+  });
+
+  it("uses the defaults when the default file is missing", () => {
+    expect(loadConfig("dataform-cost-check.yml", fs({}))).toEqual({
+      config: DEFAULT_CONFIG,
+      found: false,
+    });
+  });
+
+  it("fails when a path other than the default is missing", () => {
+    expect(() => loadConfig("ci/cost.yml", fs({}))).toThrow(
+      "config-path is set to ci/cost.yml, but there is no such file",
+    );
   });
 });

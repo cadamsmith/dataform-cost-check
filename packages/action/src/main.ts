@@ -1,4 +1,3 @@
-import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import * as core from "@actions/core";
 import {
@@ -6,16 +5,11 @@ import {
   BigQueryDryRunner,
   readRefreshHistory,
 } from "@dataform-cost-check/bigquery";
-import {
-  commentMarker,
-  DEFAULT_CONFIG,
-  limitCannotApply,
-  limitConcurrency,
-} from "@dataform-cost-check/core";
+import { commentMarker, limitCannotApply, limitConcurrency } from "@dataform-cost-check/core";
 import type { Model } from "@dataform-cost-check/core";
 import { loadModels } from "@dataform-cost-check/dataform";
 import { copyDependencies, resolveBaseRef, withBaseWorktree } from "./base-checkout.ts";
-import { parseConfig } from "./config.ts";
+import { DEFAULT_CONFIG_PATH, loadConfig } from "./config.ts";
 import { readPullRequestContext, upsertStickyComment } from "./pr-comment.ts";
 import { dryRunFailure, failureDetails, partitionFilterFailure, runCheck } from "./run.ts";
 
@@ -39,7 +33,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const configPath = core.getInput("config-path") || "dataform-cost-check.yml";
+  const configPath = core.getInput("config-path") || DEFAULT_CONFIG_PATH;
   const projectDir = core.getInput("project-dir") || ".";
   const projectId =
     core.getInput("project-id") ||
@@ -54,10 +48,13 @@ async function main(): Promise<void> {
   const baseRef = await resolveBaseRef(core.getInput("base-ref"), process.env.GITHUB_EVENT_PATH);
   core.info(`Dataform Cost Check 0.3.1 (alpha). Base: ${baseRef}. Dry runs in: ${projectId}.`);
 
-  const config = existsSync(configPath)
-    ? parseConfig(readFileSync(configPath, "utf8"))
-    : DEFAULT_CONFIG;
-  if (!existsSync(configPath)) core.info(`No ${configPath} found; using defaults.`);
+  const { config, found: configFound } = loadConfig(configPath);
+  if (!configFound) {
+    // A notice shows in the run summary; a warning would also show on the pull request.
+    core.notice(
+      `No ${configPath} found, so every model is assumed to run once a day and no limit applies.`,
+    );
+  }
 
   const overrides = {
     defaultDatabase: core.getInput("default-database"),
@@ -83,6 +80,8 @@ async function main(): Promise<void> {
     config,
     loadModels: load,
     projectDir,
+    configPath,
+    configFound,
     runner: limitConcurrency(new BigQueryDryRunner({ projectId }), MAX_CONCURRENT_DRY_RUNS),
     // Opt-in (`history: true`): job records of the dry-run project, where Dataform runs.
     readHistory: (targets) =>

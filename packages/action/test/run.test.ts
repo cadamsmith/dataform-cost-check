@@ -28,6 +28,19 @@ describe("runCheck", () => {
     expect(comment).toContain("+$225.00 / month");
   });
 
+  it("says in every rendering when the config file was missing", async () => {
+    const result = await runCheck({
+      config: DEFAULT_CONFIG,
+      loadModels: (side) => Promise.resolve(side === "base" ? [base] : [head]),
+      runner: new FakeDryRunner([[base.query, { bytes: 1024 }]]),
+      configPath: "dataform-cost-check.yml",
+      configFound: false,
+    });
+    for (const body of [result.comment, result.summary, result.full]) {
+      expect(body).toContain("No `dataform-cost-check.yml` found");
+    }
+  });
+
   it("keeps BigQuery's message out of the comment", async () => {
     const { report, comment } = await runCheck({
       config: DEFAULT_CONFIG,

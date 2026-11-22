@@ -6,7 +6,7 @@ branding:
   color: blue
 inputs:
   config-path:
-    description: Path to the config file, relative to the repository root.
+    description: Path to the config file, relative to the repository root. Without a file at the default path, every model is assumed to run once a day and no limit applies; any other path must exist.
     required: false
     default: dataform-cost-check.yml
   project-dir:

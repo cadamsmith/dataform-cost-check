@@ -11,6 +11,7 @@ import {
   estimateChanges,
   limitCannotApply,
   partitionFilterCause,
+  preOpsTempTableIn,
   preOpsVariableIn,
   readsNewTarget,
   withViewReaders,
@@ -560,5 +561,54 @@ describe("a table the same PR adds, read through a view", () => {
       expect(reader(report)).toMatchObject({ status: "unestimable" });
       expect(reader(report)).toMatchObject({ newUpstream: T });
     }
+  });
+});
+
+describe("preOpsTempTableIn", () => {
+  it("finds a temp table that pre_operations create and the query reads", () => {
+    const preOps = ["CREATE TEMP TABLE active_scope AS SELECT 1 AS customer_id"];
+    expect(preOpsTempTableIn("SELECT * FROM o JOIN active_scope USING (customer_id)", preOps)).toBe(
+      "active_scope",
+    );
+    expect(preOpsTempTableIn("SELECT * FROM `active_scope`", preOps)).toBe("active_scope");
+  });
+
+  it("knows the other spellings of CREATE TEMP TABLE", () => {
+    for (const create of [
+      "create temporary table active_scope as select 1",
+      "CREATE OR REPLACE TEMP TABLE `active_scope` AS SELECT 1",
+      "CREATE TEMP TABLE IF NOT EXISTS active_scope (id INT64)",
+    ]) {
+      expect(preOpsTempTableIn("SELECT * FROM active_scope", [create])).toBe("active_scope");
+    }
+  });
+
+  it("ignores real tables, longer names, and queries that do not read it", () => {
+    const preOps = ["CREATE TEMP TABLE active_scope AS SELECT 1"];
+    expect(preOpsTempTableIn("SELECT * FROM `p.d.active_scope`", preOps)).toBeUndefined();
+    expect(preOpsTempTableIn("SELECT active_scope_id FROM t", preOps)).toBeUndefined();
+    expect(preOpsTempTableIn("SELECT 1", preOps)).toBeUndefined();
+    expect(
+      preOpsTempTableIn("SELECT * FROM t", ["CREATE TABLE `p.d.x` AS SELECT 1"]),
+    ).toBeUndefined();
+  });
+
+  it("reports the model as not estimated, naming the table, without a dry run", async () => {
+    const preOps = ["CREATE TEMP TABLE active_scope AS SELECT 1 AS customer_id"];
+    const base = model({ name: "t", query: "SELECT 1 FROM active_scope", preOps });
+    const head = model({ name: "t", query: "SELECT 2 FROM active_scope", preOps });
+    const runner = new FakeDryRunner();
+    const e = await estimateChange(
+      { kind: "modified", target: base.target, base, head },
+      runner,
+      config,
+    );
+    expect(e).toMatchObject({
+      status: "unestimable",
+      preOpsTempTable: "active_scope",
+      reason:
+        "Reads `active_scope`, a temp table created in pre_operations, which a dry run of the query alone cannot see.",
+    });
+    expect(runner.calls).toEqual([]);
   });
 });

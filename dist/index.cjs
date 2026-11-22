@@ -46369,6 +46369,22 @@ function preOpsVariableIn(sql, preOps) {
   );
   return declared.find((name) => new RegExp(`\\b${name}\\b`, "i").test(sql));
 }
+function preOpsTempTableIn(sql, preOps) {
+  const created = preOps.flatMap(
+    (statement) => [
+      ...statement.matchAll(
+        /\bCREATE\s+(?:OR\s+REPLACE\s+)?TEMP(?:ORARY)?\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?`?([A-Za-z_]\w*)`?/gi
+      )
+    ].map((m2) => m2[1] ?? "")
+  );
+  return created.find((name) => new RegExp(`(?<![.\\w])\`?${name}\\b`, "i").test(sql));
+}
+function preOpsBlocker(sql, preOps) {
+  const variable = preOpsVariableIn(sql, preOps);
+  if (variable !== void 0) return { preOpsVariable: variable };
+  const table = preOpsTempTableIn(sql, preOps);
+  return table === void 0 ? void 0 : { preOpsTempTable: table };
+}
 function estimable(model) {
   return SKIP_REASONS[model.type] === void 0 ? model : void 0;
 }
@@ -46386,20 +46402,20 @@ async function estimateChange(change, runner, config, newTargets = /* @__PURE__ 
   }
   for (const side of [base, head]) {
     if (side === void 0) continue;
-    const variable = preOpsVariableIn(steadyStateSql(side), steadyStatePreOps(side));
-    if (variable !== void 0) {
+    const blocker = preOpsBlocker(steadyStateSql(side), steadyStatePreOps(side));
+    if (blocker !== void 0) {
       return {
         status: "unestimable",
         ...common,
-        reason: `Filters on \`${variable}\`, a variable set in pre_operations, which a dry run cannot size.`,
-        preOpsVariable: variable
+        reason: "preOpsVariable" in blocker ? `Filters on \`${blocker.preOpsVariable}\`, a variable set in pre_operations, which a dry run cannot size.` : `Reads \`${blocker.preOpsTempTable}\`, a temp table created in pre_operations, which a dry run of the query alone cannot see.`,
+        ...blocker
       };
     }
   }
   const [baseResult, headResult, fullRefreshResult] = await Promise.all([
     base === void 0 ? { bytes: 0 } : runner.estimate(steadyStateSql(base), base.location),
     head === void 0 ? { bytes: 0 } : runner.estimate(steadyStateSql(head), head.location),
-    head?.incrementalQuery === void 0 || preOpsVariableIn(head.query, head.preOps ?? []) !== void 0 ? void 0 : runner.estimate(head.query, head.location)
+    head?.incrementalQuery === void 0 || preOpsBlocker(head.query, head.preOps ?? []) !== void 0 ? void 0 : runner.estimate(head.query, head.location)
   ]);
   if ("error" in baseResult) {
     return { ...common, ...dryRunFailed("base", baseResult) };
@@ -46896,7 +46912,7 @@ async function runCheck(deps) {
 }
 function dryRunFailure(report) {
   const tried = report.estimates.filter(
-    (e2) => e2.status !== "skipped" && !(e2.status === "unestimable" && (e2.newUpstream !== void 0 || e2.preOpsVariable !== void 0 || dropsRequiredFilter(e2)))
+    (e2) => e2.status !== "skipped" && !(e2.status === "unestimable" && (e2.newUpstream !== void 0 || e2.preOpsVariable !== void 0 || e2.preOpsTempTable !== void 0 || dropsRequiredFilter(e2)))
   );
   const failed = tried.filter((e2) => e2.status === "unestimable");
   const first = failed[0];

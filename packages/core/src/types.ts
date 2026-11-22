@@ -174,6 +174,11 @@ export type Estimate =
        * A dry run cannot size such a query, so it is not tried.
        */
       readonly preOpsVariable?: string;
+      /**
+       * Set when the query reads a temp table created in `pre_operations`: its name. It
+       * exists only inside Dataform's script, so the query alone is not dry-run.
+       */
+      readonly preOpsTempTable?: string;
     };
 
 /** User configuration, normally read from `dataform-cost-check.yml`. */

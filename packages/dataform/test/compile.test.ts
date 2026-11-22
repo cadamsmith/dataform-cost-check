@@ -53,6 +53,7 @@ describe("compileProject", () => {
   it.skipIf(!hasDataformCli())("compiles and loads the sample project", async () => {
     const models = await loadModels({ projectDir });
     expect(models.map((m) => m.name).sort()).toEqual([
+      "active_customer_orders",
       "customers",
       "customers_unique",
       "drop_stale_orders",

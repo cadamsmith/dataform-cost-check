@@ -4,6 +4,41 @@
       "type": "table",
       "target": {
         "schema": "analytics",
+        "name": "active_customer_orders",
+        "database": "cost-check-sample"
+      },
+      "query": "\n\n\n\nSELECT o.order_date, o.customer_id\nFROM `cost-check-sample.raw.orders` o\nJOIN active_scope USING (customer_id)\n",
+      "disabled": false,
+      "preOps": [
+        "\n  CREATE TEMP TABLE active_scope AS\n  SELECT customer_id FROM `cost-check-sample.analytics.customers`\n  WHERE order_count > 1\n"
+      ],
+      "fileName": "definitions/active_customer_orders.sqlx",
+      "actionDescriptor": {
+        "description": "Orders from active customers, scoped through a temp table built in pre-operations."
+      },
+      "dependencyTargets": [
+        {
+          "schema": "raw",
+          "name": "orders",
+          "database": "cost-check-sample"
+        },
+        {
+          "schema": "analytics",
+          "name": "customers",
+          "database": "cost-check-sample"
+        }
+      ],
+      "canonicalTarget": {
+        "schema": "analytics",
+        "name": "active_customer_orders",
+        "database": "cost-check-sample"
+      },
+      "enumType": "TABLE"
+    },
+    {
+      "type": "table",
+      "target": {
+        "schema": "analytics",
         "name": "customers",
         "database": "cost-check-sample"
       },
@@ -229,6 +264,11 @@
   ],
   "dataformCoreVersion": "3.0.0",
   "targets": [
+    {
+      "schema": "analytics",
+      "name": "active_customer_orders",
+      "database": "cost-check-sample"
+    },
     {
       "schema": "analytics",
       "name": "customers",

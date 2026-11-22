@@ -8,7 +8,7 @@ a price tag on every data change, before it ships rather than on next month's bi
 
 [![A Dataform Cost Check comment: this change adds an estimated +$7.48 a month, and the likely cause is a removed filter on a partitioned table](docs/images/pr-comment.png)](https://github.com/cadamsmith/dataform-cost-check/pull/22)
 
-<sub>A real comment from [a demo pull request](https://github.com/cadamsmith/dataform-cost-check/pull/22) on Google's public Trends dataset, rendered by GitHub.</sub>
+<sub>A real comment, rendered by GitHub. [`examples/trends-demo`](examples/trends-demo) posted it to [pull request #22](https://github.com/cadamsmith/dataform-cost-check/pull/22): a two-commit Dataform project over Google's public Trends dataset, whose second commit drops a date filter.</sub>
 
 - **Runs in your CI, against your Google Cloud project.** No service of ours, no account, no
   telemetry. Your compiled SQL goes only to BigQuery, in the project you choose.

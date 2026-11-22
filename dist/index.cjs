@@ -45997,8 +45997,12 @@ var NOT_ALIAS = /* @__PURE__ */ new Set([
 ]);
 function inlineViews(sql, definitions) {
   let out = sql;
-  for (const [target, viewSql] of definitions) {
+  for (const [target, rawViewSql] of definitions) {
     const quoted = `\`${target}\``;
+    if (!out.includes(quoted)) continue;
+    const rest = new Map(definitions);
+    rest.delete(target);
+    const viewSql = inlineViews(rawViewSql, rest);
     let from = 0;
     for (; ; ) {
       const at = out.indexOf(quoted, from);

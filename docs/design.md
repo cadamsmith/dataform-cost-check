@@ -116,8 +116,8 @@ reports "not estimated" with a reason.
 - **New upstream tables.** A dry run fails when the SQL references a table the same PR
   creates. Report it plainly as not estimated; do not guess. When a head dry run fails and
   the query quotes the target of a model the PR adds (`core.readsNewTarget`), the reason
-  names that table and says it can be estimated once the table exists. Only direct reads
-  are caught: a query that reaches the new table through a new view keeps BigQuery's error.
+  names that table and says it can be estimated once the table exists. A read through a
+  view the PR adds or changes is caught too, since that view is inlined first (see Views).
 - **Every dry run fails.** The check fails when every changed model that needed a dry run
   came back not estimated, and quotes the first error (`action.dryRunFailure`). It
   points at project setup only when that error is about permissions, a disabled API or
@@ -158,7 +158,7 @@ reports "not estimated" with a reason.
   view. A dry run reads the view that is live in BigQuery, not the pull request's, so each
   side's view definition is inlined into the reader's query as a subquery
   (`core.inlineViews`): base with base, head with head, following unchanged views that read
-  a changed one. Chosen 2026-11-20, checked live: a view-only change that drops a filter
+  a changed one, and changed views that read each other. Chosen 2026-11-20, checked live: a view-only change that drops a filter
   showed its reader going from 51.71 MiB to 1.76 GiB per run.
 - **Assertions, operations, pre/post operations.** Decide per type: estimate, skip, or
   label. Assertions are estimated like tables: each is a SELECT that scans its inputs on

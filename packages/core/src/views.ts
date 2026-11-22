@@ -35,11 +35,18 @@ const NOT_ALIAS = new Set([
  * subquery. A dry run reads the view that is live in BigQuery, not the one in the pull
  * request, so a change to a view only shows up in its readers once it is inlined. A
  * reference with no alias gets the view's short name, so `view_name.column` still resolves.
+ * Views that the inlined SQL reads are inlined in turn.
  */
 export function inlineViews(sql: string, definitions: ReadonlyMap<string, string>): string {
   let out = sql;
-  for (const [target, viewSql] of definitions) {
+  for (const [target, rawViewSql] of definitions) {
     const quoted = `\`${target}\``;
+    if (!out.includes(quoted)) continue;
+    // A view can read another view in `definitions`: inline those too, whatever the order.
+    // Leaving the view itself out stops a loop, though BigQuery rejects circular views.
+    const rest = new Map(definitions);
+    rest.delete(target);
+    const viewSql = inlineViews(rawViewSql, rest);
     let from = 0;
     for (;;) {
       const at = out.indexOf(quoted, from);

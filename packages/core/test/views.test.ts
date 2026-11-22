@@ -68,6 +68,31 @@ describe("withViewReaders", () => {
     expect(t.base.query).toContain("SELECT 1 AS a");
   });
 
+  it("inlines a changed view that reads another changed view, in either order", () => {
+    const inner = (sql: string) => model({ name: "inner_v", type: "view", query: sql });
+    const outer = (sql: string) =>
+      model({
+        name: "outer_v",
+        type: "view",
+        query: `SELECT a, ${sql} FROM \`${inner("").target}\``,
+      });
+    const top = model({ name: "top", query: `SELECT * FROM \`${outer("").target}\`` });
+    const base = [inner("SELECT 1 AS a"), outer("1 AS b"), top];
+    for (const head of [
+      [inner("SELECT 2 AS a"), outer("2 AS b"), top],
+      [outer("2 AS b"), inner("SELECT 2 AS a"), top],
+    ]) {
+      const t = withViewReaders(diffModels(base, head), base, head).find(
+        (c) => c.target === top.target,
+      );
+      if (t?.kind !== "modified") throw new Error("expected a modified change");
+      expect(t.head.query).toContain("SELECT 2 AS a");
+      expect(t.head.query).not.toContain("`proj.analytics.inner_v`");
+      expect(t.base.query).toContain("SELECT 1 AS a");
+      expect(t.base.query).not.toContain("`proj.analytics.inner_v`");
+    }
+  });
+
   it("changes nothing when no view changed", () => {
     const base = [reader, unrelated];
     const head = [{ ...reader, query: "SELECT 2" }, unrelated];

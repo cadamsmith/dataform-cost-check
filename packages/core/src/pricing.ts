@@ -86,12 +86,13 @@ function lookup(
  * highest override among its tags, then the default.
  */
 export function runsPerDayFor(model: Pick<Model, "name" | "tags">, config: Config): number {
-  const byName = config.runsPerDay[model.name];
+  // Own keys only: a model or tag called "constructor" must not find Object's.
+  const override = (key: string) =>
+    Object.hasOwn(config.runsPerDay, key) ? config.runsPerDay[key] : undefined;
+  const byName = override(model.name);
   if (byName !== undefined) return byName;
 
-  const byTag = model.tags
-    .map((tag) => config.runsPerDay[tag])
-    .filter((n): n is number => n !== undefined);
+  const byTag = model.tags.map(override).filter((n): n is number => n !== undefined);
   if (byTag.length > 0) return Math.max(...byTag);
 
   return config.defaultRunsPerDay;

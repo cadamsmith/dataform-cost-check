@@ -211,7 +211,7 @@ function byImpact(a: Estimated, b: Estimated): number {
 
 function row(e: Estimated): string {
   const monthly = e.pricePerTib === 0 ? "bytes only" : formatUsd(e.monthlyDelta, { signed: true });
-  return `| \`${e.name}\` | ${e.kind} | ${formatBytes(e.baseBytes)} → ${formatBytes(e.headBytes)} | ${String(e.runsPerDay)} | ${monthly} |`;
+  return `| \`${e.name}\` | ${e.kind} | ${formatBytes(e.baseBytes)} → ${formatBytes(e.headBytes)} | ${e.baseRunsPerDay === undefined ? "" : `${String(e.baseRunsPerDay)} → `}${String(e.runsPerDay)} | ${monthly} |`;
 }
 
 function notesFor(e: Estimated): string[] {

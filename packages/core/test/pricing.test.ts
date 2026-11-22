@@ -76,6 +76,10 @@ describe("runsPerDayFor", () => {
   it("prefers a name override over tags", () => {
     expect(runsPerDayFor({ name: "orders_daily", tags: ["hourly"] }, config)).toBe(2);
   });
+
+  it("ignores names and tags that are also built-in object properties", () => {
+    expect(runsPerDayFor({ name: "constructor", tags: ["toString", "__proto__"] }, config)).toBe(1);
+  });
 });
 
 describe("exceedsLimit", () => {

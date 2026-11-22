@@ -67,12 +67,16 @@ its scope, how the check works, and the hard cases it must handle.
    "no report", never to exposed secrets.
 2. Check out base and head. Run `dataform compile --json` on each.
 3. Diff the two compilation results by action target. A model is "changed" if its
-   compiled query differs, or it is new or removed. (`core.diffModels`)
+   compiled query differs, or it is new or removed. Also when its runs per day or price per
+   TiB differ, for example a new tag that `runs_per_day` matches: that changes the spend
+   with the same SQL. (`core.diffModels`)
 4. For each changed model, dry-run the base SQL and the head SQL against BigQuery and read
    the bytes that would be processed. (`DryRunner`)
-5. Price it: `delta_TiB x price_per_TiB x runs_per_day x 30`. (`core.monthlyDelta`)
+5. Price each side at its own frequency and price, and take the difference:
+   `head_TiB x head_price x head_runs_per_day x 30 - base_TiB x base_price x base_runs_per_day x 30`.
    `runs_per_day` comes from an override for the model name, then the highest override
-   among its tags, then `default_runs_per_day`.
+   among its tags, then `default_runs_per_day`. When it changes, the comment shows both
+   (`1 → 24`).
 6. Post or update one sticky comment, found by a hidden marker. When no models changed, only
    update an existing comment (so it never shows a stale estimate); don't create one. Exit
    non-zero if the total exceeds `limit_monthly` (strictly greater; exactly at the limit

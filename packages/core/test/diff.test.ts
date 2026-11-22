@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { diffModels } from "../src/index.ts";
+import { DEFAULT_CONFIG, diffModels } from "../src/index.ts";
 import { model } from "./helpers.ts";
 
 describe("diffModels", () => {
@@ -41,5 +41,27 @@ describe("diffModels and pre_operations", () => {
     const head = { ...base, preOps: ["DECLARE a INT64 DEFAULT 2;"] };
     expect(diffModels([base], [head]).map((c) => c.kind)).toEqual(["modified"]);
     expect(diffModels([base], [{ ...base }])).toEqual([]);
+  });
+});
+
+describe("diffModels with a config", () => {
+  const config = { ...DEFAULT_CONFIG, runsPerDay: { hourly: 24 } };
+  const daily = model({ name: "t", tags: ["daily"] });
+
+  it("counts a new tag that changes runs per day as a change", () => {
+    const hourly = { ...daily, tags: ["hourly"] };
+    expect(diffModels([daily], [hourly])).toEqual([]);
+    expect(diffModels([daily], [hourly], config)).toEqual([
+      { kind: "modified", target: daily.target, base: daily, head: hourly },
+    ]);
+  });
+
+  it("ignores a new tag that does not change runs per day", () => {
+    expect(diffModels([daily], [{ ...daily, tags: ["nightly"] }], config)).toEqual([]);
+  });
+
+  it("counts a location with another price as a change", () => {
+    const moved = { ...daily, location: "europe-west2" };
+    expect(diffModels([daily], [moved], config)).toHaveLength(1);
   });
 });

@@ -5,7 +5,8 @@
 
 > **Status: alpha (0.4.1).** It runs end to end in GitHub Actions with keyless sign-in to
 > Google Cloud, tested on a private Dataform 3 project with JavaScript-defined actions. Try it
-> on a non-critical repository first, and tell us what it gets wrong.
+> on a non-critical repository first, and tell us what it gets wrong. Using it? Say so in
+> [this discussion](https://github.com/cadamsmith/dataform-cost-check/discussions/92).
 
 A GitHub Action that posts a BigQuery cost estimate on every pull request in a
 [Dataform](https://cloud.google.com/dataform) project: a price tag on every data change,

@@ -42,4 +42,6 @@ query, go to the job log only.
 ## Reporting a vulnerability
 
 Please report it privately through GitHub: **Security → Report a vulnerability** on this
-repository. Do not open a public issue. You can expect a first reply within a week.
+repository, or go straight to the
+[private report form](https://github.com/cadamsmith/dataform-cost-check/security/advisories/new).
+Do not open a public issue. You can expect a first reply within a week.

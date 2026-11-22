@@ -2,7 +2,7 @@
 
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/cadamsmith/dataform-cost-check/badge)](https://scorecard.dev/viewer/?uri=github.com/cadamsmith/dataform-cost-check)
 
-> **Status: alpha (0.4.0).** It runs end to end in GitHub Actions with keyless sign-in to
+> **Status: alpha (0.4.1).** It runs end to end in GitHub Actions with keyless sign-in to
 > Google Cloud, tested on a private Dataform 3 project with JavaScript-defined actions. Try it
 > on a non-critical repository first, and tell us what it gets wrong.
 
@@ -86,7 +86,7 @@ jobs:
       # Only if the project has a package.json (pins @dataform/core):
       # - run: npm ci
       # Pin the full commit SHA of a release, not a tag (see SECURITY.md).
-      - uses: cadamsmith/dataform-cost-check@<commit SHA> # v0.4.0
+      - uses: cadamsmith/dataform-cost-check@<commit SHA> # v0.4.1
         with:
           config-path: dataform-cost-check.yml
 ```

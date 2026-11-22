@@ -1,6 +1,6 @@
 {
   "name": "@dataform-cost-check/bigquery",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "description": "DryRunner implementation against the BigQuery API.",
   "license": "MIT",

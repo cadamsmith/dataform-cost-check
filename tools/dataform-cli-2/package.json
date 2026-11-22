@@ -1,8 +1,0 @@
-{
-  "name": "dataform-cli-2",
-  "private": true,
-  "description": "Pins the Dataform CLI 2.9.0 that CI installs with npm ci, lockfile included.",
-  "dependencies": {
-    "@dataform/cli": "2.9.0"
-  }
-}

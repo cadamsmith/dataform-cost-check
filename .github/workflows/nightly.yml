@@ -74,12 +74,12 @@ jobs:
           npm ci --prefix fixtures/v2-project
 
       # The 2.x CLI is not a dependency of this repository; only this job uses it. Pinned by
-      # hash through the lockfile in tools/dataform-cli-2.
+      # version, not by a lockfile, for the same reason as in ci.yml.
       - name: Install Dataform CLI 2.9.0
-        run: npm ci --prefix tools/dataform-cli-2
+        run: npm install --prefix "$RUNNER_TEMP/cli2" @dataform/cli@2.9.0 # zizmor: ignore[adhoc-packages]
 
       - name: Compile and parse a dataform.json project
-        run: DATAFORM_V2_CLI="$GITHUB_WORKSPACE/tools/dataform-cli-2/node_modules/.bin/dataform" node_modules/.bin/vitest run packages/dataform/test/compile.test.ts
+        run: DATAFORM_V2_CLI="$RUNNER_TEMP/cli2/node_modules/.bin/dataform" node_modules/.bin/vitest run packages/dataform/test/compile.test.ts
 
   report:
     name: Open an issue when the nightly fails

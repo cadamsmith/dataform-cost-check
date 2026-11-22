@@ -125,8 +125,8 @@ Add `dataform-cost-check.yml` at the repository root. Every key is optional:
 
 ```yaml
 limit_monthly: 100 # fail the check when a change adds more than this many USD a month
-default_runs_per_day: 1
-runs_per_day: # how often models run, by Dataform tag or model name
+default_runs_per_day: 1 # weekly: 0.142857 (1/7); the comment shows "1 / week"
+runs_per_day: # overrides by model name, or by a tag your schedules select on
   hourly: 24
 # price_per_tib: 6.25 # one price everywhere (a discount, or 0 for flat-rate plans).
 #                     # Default: Google's list price for each model's location.
@@ -134,7 +134,10 @@ runs_per_day: # how often models run, by Dataform tag or model name
 ```
 
 Runs per day come from this file, not from your Dataform schedules. Set them to match your
-workflow configs, or the monthly figures are off by the same factor. Without the file, every
+workflow configs, or the monthly figures are off by the same factor. If every model runs on
+one schedule, `default_runs_per_day` alone is enough. A tag is only worth listing when your
+workflow configs pick models by that tag; a tag by itself changes nothing about when a
+model runs. A model name always works. Without the file, every
 model is assumed to run once a day, no limit applies, and the comment says so.
 
 ## 5. Your first comment

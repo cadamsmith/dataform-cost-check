@@ -1,3 +1,4 @@
+import { formatRuns } from "./pricing.ts";
 import type { Estimate, LikelyCause, Report } from "./types.ts";
 
 type Estimated = Extract<Estimate, { status: "estimated" }>;
@@ -106,7 +107,7 @@ export function renderComment(
 
   const shown: Estimated[] = [];
   const tableHeader = [
-    "| Model | Change | Scanned per run (before → after) | Runs / day | Monthly estimate |",
+    "| Model | Change | Scanned per run (before → after) | Runs | Monthly estimate |",
     "|---|---|---|--:|--:|",
   ];
   if (estimated.length > 0 && fits([...tableHeader, ""])) {
@@ -211,7 +212,17 @@ function byImpact(a: Estimated, b: Estimated): number {
 
 function row(e: Estimated): string {
   const monthly = e.pricePerTib === 0 ? "bytes only" : formatUsd(e.monthlyDelta, { signed: true });
-  return `| \`${e.name}\` | ${e.kind} | ${formatBytes(e.baseBytes)} → ${formatBytes(e.headBytes)} | ${e.baseRunsPerDay === undefined ? "" : `${String(e.baseRunsPerDay)} → `}${String(e.runsPerDay)} | ${monthly} |`;
+  return `| \`${e.name}\` | ${e.kind} | ${formatBytes(e.baseBytes)} → ${formatBytes(e.headBytes)} | ${runs(e)} | ${monthly} |`;
+}
+
+/** `1 / week`, or `1 → 24 / day` when it changed (`1 / day → 1 / week` across units). */
+function runs(e: Estimated): string {
+  const head = formatRuns(e.runsPerDay);
+  if (e.baseRunsPerDay === undefined) return head;
+  const base = formatRuns(e.baseRunsPerDay);
+  return base.endsWith(" / day") && head.endsWith(" / day")
+    ? `${base.slice(0, -" / day".length)} → ${head}`
+    : `${base} → ${head}`;
 }
 
 function notesFor(e: Estimated): string[] {

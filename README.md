@@ -51,10 +51,10 @@ count for each, and posts one sticky comment. A fuller example, with every secti
 >
 > This change adds an estimated **+$246.97 / month**. :x: Over the $100.00 limit.
 >
-> | Model | Change | Scanned per run (before → after) | Runs / day | Monthly estimate |
+> | Model | Change | Scanned per run (before → after) | Runs | Monthly estimate |
 > |---|---|---|--:|--:|
-> | `orders_daily` | modified | 40.96 GiB → 1.24 TiB | 1 | +$225.00 |
-> | `customers` | added | 0 B → 5.00 GiB | 24 | +$21.97 |
+> | `orders_daily` | modified | 40.96 GiB → 1.24 TiB | 1 / day | +$225.00 |
+> | `customers` | added | 0 B → 5.00 GiB | 24 / day | +$21.97 |
 >
 > - `orders_daily`: likely cause: a filter on the partitioned table `proj.raw.orders` was removed.
 >
@@ -146,8 +146,8 @@ fails:
 # price_per_tib_by_location: # optional: your own price for some locations
 #   asia-northeast1: 7.00
 limit_monthly: 100 # fail the check above this
-default_runs_per_day: 1
-runs_per_day: # overrides by Dataform tag or model name
+default_runs_per_day: 1 # weekly: 0.142857 (1/7)
+runs_per_day: # overrides by model name, or by a tag your schedules select on
   hourly: 24
 history: false # opt-in: last run per changed model, see Permissions
 ```

@@ -7,7 +7,7 @@ import {
 } from "@dataform-cost-check/bigquery";
 import { commentMarker, limitCannotApply, limitConcurrency } from "@dataform-cost-check/core";
 import type { Model } from "@dataform-cost-check/core";
-import { loadModels } from "@dataform-cost-check/dataform";
+import { isDataformProject, loadModels } from "@dataform-cost-check/dataform";
 import { copyDependencies, resolveBaseRef, withBaseWorktree } from "./base-checkout.ts";
 import { DEFAULT_CONFIG_PATH, loadConfig } from "./config.ts";
 import { readPullRequestContext, upsertStickyComment } from "./pr-comment.ts";
@@ -70,6 +70,11 @@ async function main(): Promise<void> {
       ? loadModels({ projectDir: resolve(repoDir, projectDir), overrides })
       : withBaseWorktree(repoDir, baseRef, async (dir) => {
           const baseProject = join(dir, projectDir);
+          // The pull request adds the project: nothing at base, so every model is new.
+          if (!isDataformProject(baseProject)) {
+            core.info(`No Dataform project at base in ${projectDir}: every model counts as added.`);
+            return [];
+          }
           // The base checkout is a fresh directory. Reuse the dependencies installed at
           // head rather than downloading them again.
           await copyDependencies(resolve(repoDir, projectDir), baseProject);

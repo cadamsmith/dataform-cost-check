@@ -119,6 +119,14 @@ export class DataformCompilationError extends Error {
 
 const execFileAsync = promisify(execFile);
 
+/**
+ * True when `dir` holds a Dataform project: a `workflow_settings.yaml` (Dataform 3) or a
+ * legacy `dataform.json`. False at a base commit from before the project was added.
+ */
+export function isDataformProject(dir: string): boolean {
+  return existsSync(join(dir, "workflow_settings.yaml")) || existsSync(join(dir, "dataform.json"));
+}
+
 function compilationErrors(output: unknown): readonly CompilationErrorEntry[] {
   return (output as CompileOutput | null)?.graphErrors?.compilationErrors ?? [];
 }
@@ -156,6 +164,11 @@ export function parseCliJson(stdout: string): unknown {
  */
 export async function compileProject(options: CompileOptions): Promise<unknown> {
   const command = options.command ?? "dataform";
+  // Checked first: a missing working directory also fails with ENOENT, which would
+  // otherwise read as a missing CLI.
+  if (!existsSync(options.projectDir)) {
+    throw new Error(`No Dataform project at ${options.projectDir}: the directory does not exist.`);
+  }
   if (
     existsSync(join(options.projectDir, "package.json")) &&
     !existsSync(join(options.projectDir, "node_modules"))

@@ -23,7 +23,7 @@ a price tag on every data change, before it ships rather than on next month's bi
 **Get started: [Try it on your project](docs/getting-started.md)**, about 15 minutes, most of
 it in Google Cloud.
 
-> **Status: alpha (0.4.3).** It runs end to end in GitHub Actions with keyless sign-in to
+> **Status: alpha (0.4.4).** It runs end to end in GitHub Actions with keyless sign-in to
 > Google Cloud, tested on a private Dataform 3 project with JavaScript-defined actions. Try it
 > on a non-critical repository first, and tell us what it gets wrong. Using it? Say so in
 > [this discussion](https://github.com/cadamsmith/dataform-cost-check/discussions/92).
@@ -113,7 +113,7 @@ jobs:
       # Only if the project has a package.json (pins @dataform/core):
       # - run: npm ci
       # Pin the full commit SHA of a release, not a tag (see SECURITY.md).
-      - uses: cadamsmith/dataform-cost-check@<commit SHA> # v0.4.3
+      - uses: cadamsmith/dataform-cost-check@<commit SHA> # v0.4.4
         with:
           config-path: dataform-cost-check.yml
 ```

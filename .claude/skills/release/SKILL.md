@@ -18,7 +18,16 @@ description: Cut a Dataform Cost Check release (vX.Y.Z) - bump versions, merge t
    checks have registered and passed.
 4. **Tag** on the merged `main`: `git tag -a vX.Y.Z -m "Dataform Cost Check X.Y.Z (alpha)"` and
    `git push origin vX.Y.Z`.
-5. **Verify** the `Release` workflow run: every step green (attestation is skipped while the repo
-   is private), the GitHub release exists, and the major tag (`v0`) points at the new commit.
+5. **Verify** the `Release` workflow run: every step green, including "Attest build provenance",
+   the GitHub release exists, and the major tag (`v0`) points at the new commit. Confirm the
+   attestation: `gh attestation verify dist/index.cjs --repo cadamsmith/dataform-cost-check`
+   on the tagged commit exits 0.
 6. **Report** the release URL and the full commit SHA (`git rev-parse vX.Y.Z^{commit}`). That SHA
    is what users and the sandbox pin. Offer to run the `sandbox-check` skill against it.
+7. **Marketplace (maintainer).** GitHub has no API for this, so releases the workflow creates
+   are not published to the Marketplace listing. End the report by asking the maintainer to open
+   `https://github.com/cadamsmith/dataform-cost-check/releases/edit/vX.Y.Z`, tick "Publish this
+   Action to the GitHub Marketplace", keep the label on **Latest**, and click Update release.
+   Skipping it only leaves the listing's shown version behind; SHA and `@v0` users are
+   unaffected. If the listing at https://github.com/marketplace/actions/dataform-cost-check
+   already shows the new version without this, remove this step.

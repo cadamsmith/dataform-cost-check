@@ -47028,7 +47028,7 @@ async function main() {
     );
   }
   const baseRef = await resolveBaseRef(getInput("base-ref"), process.env.GITHUB_EVENT_PATH);
-  info(`Dataform Cost Check 0.4.4 (alpha). Base: ${baseRef}. Dry runs in: ${projectId}.`);
+  info(`Dataform Cost Check 0.5.0 (alpha). Base: ${baseRef}. Dry runs in: ${projectId}.`);
   const { config, found: configFound } = loadConfig(configPath);
   if (!configFound) {
     notice(

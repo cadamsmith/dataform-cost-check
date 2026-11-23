@@ -6,6 +6,7 @@ import {
   commentMarker,
   formatBytes,
   formatUsd,
+  JIT_REASON,
   renderComment,
 } from "../src/index.ts";
 import type { Estimate, Report } from "../src/index.ts";
@@ -114,6 +115,23 @@ describe("renderComment", () => {
     const body = renderComment(report({ estimates: [broken], limitMonthly: 100 }));
     expect(body).toContain("None of the changed models were estimated.");
     expect(body).not.toContain("Within the");
+  });
+
+  it("lists a just-in-time action under Not estimated, without blaming a dry run", () => {
+    const jit: Estimate = {
+      status: "unestimable",
+      target: "proj.analytics.orders_jit",
+      name: "orders_jit",
+      kind: "modified",
+      type: "table",
+      reason: JIT_REASON,
+      jit: true,
+    };
+    const body = renderComment(report({ estimates: [jit], limitMonthly: 100 }));
+    expect(body).toMatchSnapshot();
+    expect(body).toContain(`- \`orders_jit\` (modified): ${JIT_REASON}`);
+    expect(body).not.toContain("Dry run");
+    expect(body).not.toContain("job log");
   });
 
   it("renders when nothing could be estimated", () => {

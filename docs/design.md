@@ -172,8 +172,9 @@ reports "not estimated" with a reason.
   Pre-operations are part of the diff, so changing them alone counts as a change.
 - **Just-in-time actions.** Dataform 3 can build an action's SQL when the workflow runs
   (`.jitCode()` in JavaScript, or `compilation_mode: "jit"` in SQLX). `dataform compile --json`
-  then carries the code (`jitCode`) and no `query` or `queries`: checked 2026-11-23 with CLI
-  3.0.61 and 3.1.6, for tables, incrementals, views and operations. The adapter used to stop
+  then carries the code (`jitCode`) and no `query` or `queries`. Checked 2026-11-23: with CLI
+  3.0.61 for a JavaScript table and operation; with 3.1.6 for those, plus an incremental, a
+  view and a SQLX `compilation_mode: "jit"` table. The adapter used to stop
   the whole check on these ("has no query"), so one JIT action anywhere failed every pull
   request. Now each becomes a model with an empty query and `Model.jitCode`, and is reported
   as not estimated (`Estimate.jit`), never dry-run, and left out of the "every dry run fails"

@@ -131,11 +131,17 @@ reports "not estimated" with a reason.
   billed bytes.
   **Sizing the MERGE (#114), 2026-11-23.** `dataform compile --json` has no MERGE, because
   Dataform takes the column list from the existing table at run time. `core.mergeSql`
-  copies Dataform's BigQuery `mergeInto` character for character (identical in core 2.9.0
-  and CLI 3.0.61 and 3.1.6). A test runs Dataform's own `mergeInto` out of the installed
-  bundle and compares, in CI and in the nightly CLI canary, so drift fails a build.
-  `DryRunner.table` reads the target's columns and logical size with a free `tables.get`
-  (Data Viewer covers it). Three outcomes (`Estimate.merge.sizing`):
+  copies Dataform's BigQuery `mergeInto` from CLI 3.1.x character for character,
+  `incrementalPredicates` included. CLI 3.0.x and core 2.x differ only in alias names
+  (`T`/`S` for `DATAFORM_DEST`/`DATAFORM_SOURCE`) and whitespace, which do not change the
+  bytes (both forms dry-ran to 258,085,598 on the sandbox's `terms_daily`). A test runs
+  Dataform's own `mergeInto` out of the installed bundle and compares: exactly for 3.1.x,
+  up to aliases and whitespace for older versions. It runs in CI and in the nightly CLI
+  canary, so drift fails a build (it caught the 3.1.x change). Models with
+  `incrementalStrategy: INSERT_OVERWRITE` (3.1+) run a different script, a staging table
+  and a partition-replacing MERGE, so they get no MERGE sizing and no MERGE note; sizing
+  them is not done yet. `DryRunner.table` reads the target's columns and logical size with
+  a free `tables.get` (Data Viewer covers it). Three outcomes (`Estimate.merge.sizing`):
   - `merge`: the MERGE dry run succeeded on every side that has a key. Its bytes replace
     the query's, so the figure and the monthly change are exact.
   - `range`: the MERGE dry run failed. BigQuery requires `bigquery.tables.updateData` on the

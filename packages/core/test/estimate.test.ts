@@ -423,13 +423,10 @@ describe("unique-key incremental models", () => {
   const merging = (iq: string, merge: Model["merge"] = key) =>
     model({ name: "m", type: "incremental", query: "q", incrementalQuery: iq, merge });
   const mergeOf = (m: Model) =>
-    mergeSql(
-      m.target,
-      table.columns,
-      m.incrementalQuery ?? "",
-      ["id"],
-      m.merge?.updatePartitionFilter,
-    );
+    mergeSql(m.target, table.columns, m.incrementalQuery ?? "", ["id"], {
+      updatePartitionFilter: m.merge?.updatePartitionFilter,
+      incrementalPredicates: m.merge?.incrementalPredicates,
+    });
 
   it("sizes from the query alone when the table cannot be looked up", async () => {
     const m = merging("iq");
@@ -493,8 +490,12 @@ describe("unique-key incremental models", () => {
     );
   });
 
-  it("passes the update filter into the MERGE", async () => {
-    const head = merging("new", { ...key, updatePartitionFilter: "d > '2026-01-01'" });
+  it("passes the update filter and incremental predicates into the MERGE", async () => {
+    const head = merging("new", {
+      ...key,
+      updatePartitionFilter: "d > '2026-01-01'",
+      incrementalPredicates: ["DATAFORM_DEST.v > 0"],
+    });
     const runner = new FakeDryRunner(
       [
         ["new", { bytes: 20 }],
@@ -507,7 +508,8 @@ describe("unique-key incremental models", () => {
     const e = await estimateChange({ kind: "added", target: head.target, head }, runner, config);
     expect(e).toMatchObject({ headBytes: 30, merge: { sizing: { by: "merge" } } });
     expect(runner.calls.map((c) => c.sql)).toContain(mergeOf(head));
-    expect(mergeOf(head)).toContain("and T.d > '2026-01-01'");
+    expect(mergeOf(head)).toContain("and DATAFORM_DEST.d > '2026-01-01'");
+    expect(mergeOf(head)).toContain("and (DATAFORM_DEST.v > 0)");
   });
 
   it("gives a range up to the whole table when the MERGE dry run is denied", async () => {

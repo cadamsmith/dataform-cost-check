@@ -22,12 +22,16 @@ export interface Model {
   /** Incremental models only: statements run before `incrementalQuery`. */
   readonly incrementalPreOps?: readonly string[];
   /**
-   * Incremental models with a `uniqueKey`: each run is a MERGE into the existing table,
-   * on these key columns, with `updatePartitionFilter` (when set) limiting the target rows.
+   * Incremental models with a `uniqueKey` (and the default MERGE strategy, not
+   * `INSERT_OVERWRITE`): each run is a MERGE into the existing table, on these key columns,
+   * with `updatePartitionFilter` and `incrementalPredicates` (when set) limiting the
+   * target rows.
    */
   readonly merge?: {
     readonly uniqueKey: readonly string[];
     readonly updatePartitionFilter?: string;
+    /** Extra conditions on the target (`bigquery.incrementalPredicates`, Dataform 3.1+). */
+    readonly incrementalPredicates?: readonly string[];
   };
   readonly tags: readonly string[];
   /**

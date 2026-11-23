@@ -74,7 +74,12 @@ interface CompiledAction {
   readonly tags?: readonly string[];
   readonly disabled?: boolean;
   readonly uniqueKey?: readonly string[];
-  readonly bigquery?: { readonly updatePartitionFilter?: string };
+  readonly bigquery?: {
+    readonly updatePartitionFilter?: string;
+    readonly incrementalPredicates?: readonly string[];
+  };
+  /** Dataform 3.1+: `INSERT_OVERWRITE` replaces partitions instead of merging on the key. */
+  readonly incrementalStrategy?: string;
 }
 
 interface CompilationErrorEntry {
@@ -228,12 +233,17 @@ function toModel(
       action.incrementalPreOps.length > 0 && { incrementalPreOps: action.incrementalPreOps }),
     tags: action.tags ?? [],
     ...(type === "incremental" &&
-      (action.uniqueKey?.length ?? 0) > 0 && {
+      (action.uniqueKey?.length ?? 0) > 0 &&
+      action.incrementalStrategy !== "INSERT_OVERWRITE" && {
         merge: {
           uniqueKey: action.uniqueKey ?? [],
           ...(action.bigquery?.updatePartitionFilter && {
             updatePartitionFilter: action.bigquery.updatePartitionFilter,
           }),
+          ...(action.bigquery?.incrementalPredicates !== undefined &&
+            action.bigquery.incrementalPredicates.length > 0 && {
+              incrementalPredicates: action.bigquery.incrementalPredicates,
+            }),
         },
       }),
     ...(location !== undefined && { location }),

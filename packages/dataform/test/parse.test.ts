@@ -226,6 +226,19 @@ describe("parseCompileOutput on incremental models with a unique key", () => {
       uniqueKey: ["order_id"],
       updatePartitionFilter: "day > '2026-01-01'",
     });
+    expect(
+      inc(withKey({ incrementalPredicates: ["DATAFORM_DEST.day > '2026-01-01'"] }))?.merge,
+    ).toEqual({
+      uniqueKey: ["order_id"],
+      incrementalPredicates: ["DATAFORM_DEST.day > '2026-01-01'"],
+    });
+    const overwrite = sampleWith((o) => {
+      const t = (o.tables as Record<string, unknown>[]).find((x) => x.type === "incremental");
+      if (t === undefined) throw new Error("sample has no incremental");
+      t.uniqueKey = ["order_id"];
+      t.incrementalStrategy = "INSERT_OVERWRITE";
+    });
+    expect(inc(overwrite)?.merge).toBeUndefined();
     const noKey = sampleWith((o) => {
       for (const t of o.tables as Record<string, unknown>[]) delete t.uniqueKey;
     });

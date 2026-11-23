@@ -46133,18 +46133,27 @@ function withViewReaders(changes, base, head) {
 }
 
 // ../core/src/merge.ts
-function mergeSql(target, columns, query, uniqueKey, updatePartitionFilter) {
+function mergeSql(target, columns, query, uniqueKey, options = {}) {
+  const { updatePartitionFilter } = options;
+  const incrementalPredicatesString = predicatesString(options.incrementalPredicates);
   const backtickedColumns = columns.map((column) => `\`${column}\``);
   return `
-merge \`${target}\` T
+merge \`${target}\` DATAFORM_DEST
 using (${query}
-) S
-on ${uniqueKey.map((uniqueKeyCol) => `T.${uniqueKeyCol} = S.${uniqueKeyCol}`).join(` and `)}
-  ${updatePartitionFilter ? `and T.${updatePartitionFilter}` : ""}
+) DATAFORM_SOURCE
+on ${uniqueKey.map((uniqueKeyCol) => `DATAFORM_DEST.${uniqueKeyCol} = DATAFORM_SOURCE.${uniqueKeyCol}`).join(` and `)} ${updatePartitionFilter ? `and DATAFORM_DEST.${updatePartitionFilter}` : ""}
+${incrementalPredicatesString ? ` ${incrementalPredicatesString}` : ""}
 when matched then
-  update set ${columns.map((column) => `\`${column}\` = S.${column}`).join(",")}
+  update set ${columns.map((column) => `\`${column}\` = DATAFORM_SOURCE.${column}`).join(",")}
 when not matched then
   insert (${backtickedColumns.join(",")}) values (${backtickedColumns.join(",")})`;
+}
+function predicatesString(incrementalPredicates) {
+  const validPredicates = incrementalPredicates ? incrementalPredicates.filter((p) => p.trim() !== "") : [];
+  if (validPredicates.length === 0) {
+    return "";
+  }
+  return `and ${validPredicates.map((p) => `(${p})`).join(" and ")}`;
 }
 
 // ../core/src/render.ts
@@ -46610,13 +46619,10 @@ async function sizeMerges(target, base, head, baseBytes, headBytes, runner) {
   const table = runner.table === void 0 ? void 0 : await runner.table(target);
   if (table === void 0) return { baseBytes, headBytes, sizing: { by: "query" } };
   const mergeRun = (side) => side?.merge === void 0 ? void 0 : runner.estimate(
-    mergeSql(
-      target,
-      table.columns,
-      steadyStateSql(side),
-      side.merge.uniqueKey,
-      side.merge.updatePartitionFilter
-    ),
+    mergeSql(target, table.columns, steadyStateSql(side), side.merge.uniqueKey, {
+      updatePartitionFilter: side.merge.updatePartitionFilter,
+      incrementalPredicates: side.merge.incrementalPredicates
+    }),
     side.location
   );
   const [baseRun, headRun] = await Promise.all([mergeRun(base), mergeRun(head)]);
@@ -46849,11 +46855,14 @@ function toModel(action, type, location, query) {
     ...action.preOps !== void 0 && action.preOps.length > 0 && { preOps: action.preOps },
     ...action.incrementalPreOps !== void 0 && action.incrementalPreOps.length > 0 && { incrementalPreOps: action.incrementalPreOps },
     tags: action.tags ?? [],
-    ...type === "incremental" && (action.uniqueKey?.length ?? 0) > 0 && {
+    ...type === "incremental" && (action.uniqueKey?.length ?? 0) > 0 && action.incrementalStrategy !== "INSERT_OVERWRITE" && {
       merge: {
         uniqueKey: action.uniqueKey ?? [],
         ...action.bigquery?.updatePartitionFilter && {
           updatePartitionFilter: action.bigquery.updatePartitionFilter
+        },
+        ...action.bigquery?.incrementalPredicates !== void 0 && action.bigquery.incrementalPredicates.length > 0 && {
+          incrementalPredicates: action.bigquery.incrementalPredicates
         }
       }
     },

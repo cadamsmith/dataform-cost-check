@@ -393,13 +393,10 @@ async function sizeMerges(
     side?.merge === undefined
       ? undefined
       : runner.estimate(
-          mergeSql(
-            target,
-            table.columns,
-            steadyStateSql(side),
-            side.merge.uniqueKey,
-            side.merge.updatePartitionFilter,
-          ),
+          mergeSql(target, table.columns, steadyStateSql(side), side.merge.uniqueKey, {
+            updatePartitionFilter: side.merge.updatePartitionFilter,
+            incrementalPredicates: side.merge.incrementalPredicates,
+          }),
           side.location,
         );
   const [baseRun, headRun] = await Promise.all([mergeRun(base), mergeRun(head)]);

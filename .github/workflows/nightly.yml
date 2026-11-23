@@ -18,7 +18,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The version we build against, and whatever 3.x is newest tonight.
+        # The oldest 3.x we support (teams on core 3.0), and whatever 3.x is newest tonight.
+        # CI tests 3.1.6 on every push.
         cli: ["3.0.61", "3"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

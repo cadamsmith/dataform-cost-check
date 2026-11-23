@@ -32,9 +32,10 @@ jobs:
       # to the version the adapter was built against. Installed with npm, not pnpm: the CLI
       # requires packages it does not declare, which pnpm's strict layout does not provide.
       # Pinned by version, not by a lockfile: Scorecard reads every lockfile, and this CLI's
-      # own dependencies carry advisories it cannot fix (vm2), reported as this repo's.
+      # own dependencies carry advisories it cannot fix (glob, minimatch), reported as this
+      # repo's.
       - name: Install the Dataform CLI
-        run: npm install -g @dataform/cli@3.0.61 # zizmor: ignore[adhoc-packages]
+        run: npm install -g @dataform/cli@3.1.6 # zizmor: ignore[adhoc-packages]
 
       - name: Lint
         run: pnpm lint

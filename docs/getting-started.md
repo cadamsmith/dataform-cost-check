@@ -92,12 +92,13 @@ jobs:
         with:
           node-version: 22
       # Match your project's Dataform version: the 3.x CLI needs a @dataform/core with the
-      # same major.minor (for example cli 3.0.61 with core 3.0.x). Dataform 2: @dataform/cli@2.9.0.
-      - run: npm install -g @dataform/cli@3.0.61
+      # same major.minor (for example cli 3.1.6 with core 3.1.x, or cli 3.0.61 with core
+      # 3.0.x). Dataform 2: @dataform/cli@2.9.0.
+      - run: npm install -g @dataform/cli@3.1.6
       # Only if your project has a package.json that pins @dataform/core:
       - run: npm ci
       # Pin a release's full commit SHA (see the release page), not a tag.
-      - uses: cadamsmith/dataform-cost-check@be9440a0111cea988496103498d6cd68f739b949 # v0.4.2
+      - uses: cadamsmith/dataform-cost-check@0cc1dd60ff1bff0e4a079da5c52bf0ba57aeb551 # v0.5.0
 ```
 
 If the Dataform project is not at the repository root, add `project-dir: path/to/project` under
@@ -112,7 +113,7 @@ schema suffix, compilation variables), pass the same values so the check compile
 production runs:
 
 ```yaml
-- uses: cadamsmith/dataform-cost-check@be9440a0111cea988496103498d6cd68f739b949 # v0.4.2
+- uses: cadamsmith/dataform-cost-check@0cc1dd60ff1bff0e4a079da5c52bf0ba57aeb551 # v0.5.0
   with:
     default-database: my-prod-project
     schema-suffix: ""

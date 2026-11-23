@@ -9,7 +9,7 @@ import type { Model } from "@dataform-cost-check/core";
 import { describe, expect, it } from "vitest";
 import { DataformCompilationError, parseCliJson, parseCompileOutput } from "../src/index.ts";
 
-/** Real `dataform compile --json` output (CLI 3.0.61) from fixtures/sample-project. */
+/** Real `dataform compile --json` output (CLI and core 3.1.6) from fixtures/sample-project. */
 const sample: unknown = JSON.parse(
   readFileSync(new URL("fixtures/sample-compile.json", import.meta.url), "utf8"),
 );

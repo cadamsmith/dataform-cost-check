@@ -35,7 +35,7 @@ packages/
 fixtures/
   sample-project/   # Tiny Dataform project used in tests
 packages/dataform/test/fixtures/
-  sample-compile.json  # Compile output of fixtures/sample-project (CLI 3.0.61)
+  sample-compile.json  # Compile output of fixtures/sample-project (CLI 3.1.6)
   js-compile.json      # A JavaScript-defined project: publish() loops, includes/, pre-operations
   v2-cli-stdout.txt    # Raw stdout of a Dataform 2.x CLI (2.9.0), log line included
 docs/

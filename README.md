@@ -213,7 +213,7 @@ not deduct BigQuery's monthly free tier. (Billing rounds each query up to the ne
 a 10 MiB minimum, which can add a fraction of a cent.) They assume on-demand pricing. If your project uses
 slot-based (Editions) pricing, bytes scanned do not map to dollars. The action never predicts
 run time. Runs per day come from your config file, not from your Dataform schedules. Tested
-with Dataform 3.x (CLI and core 3.0.61) and with Dataform 2.x projects (`dataform.json`,
+with Dataform 3.x (CLI and core 3.1.6 and 3.0.61) and with Dataform 2.x projects (`dataform.json`,
 CLI and core 2.9.0, compile only; install the 2.x CLI in your workflow). The compile
 override inputs are untested on 2.x.
 In a repository with several Dataform projects, run one job per `project-dir`: each keeps its

@@ -28,6 +28,7 @@
           "database": "cost-check-sample"
         }
       ],
+      "hermeticity": "NON_HERMETIC",
       "canonicalTarget": {
         "schema": "analytics",
         "name": "active_customer_orders",
@@ -56,6 +57,7 @@
           "database": "cost-check-sample"
         }
       ],
+      "hermeticity": "NON_HERMETIC",
       "canonicalTarget": {
         "schema": "analytics",
         "name": "customers",
@@ -72,6 +74,7 @@
       },
       "query": "SELECT order_date, customer_id, COUNT(*) AS orders\nFROM `cost-check-sample.raw.orders`\n\nGROUP BY order_date, customer_id",
       "disabled": false,
+      "protected": false,
       "preOps": ["DECLARE checkpoint DATE DEFAULT (SELECT DATE '2000-01-01')"],
       "fileName": "definitions/orders_by_customer.js",
       "bigquery": {
@@ -91,12 +94,15 @@
       "incrementalPreOps": [
         "DECLARE checkpoint DATE DEFAULT (SELECT MAX(order_date) FROM `cost-check-sample.analytics.orders_by_customer`)"
       ],
+      "hermeticity": "NON_HERMETIC",
       "canonicalTarget": {
         "schema": "analytics",
         "name": "orders_by_customer",
         "database": "cost-check-sample"
       },
-      "enumType": "INCREMENTAL"
+      "enumType": "INCREMENTAL",
+      "onSchemaChange": "IGNORE",
+      "incrementalStrategy": "INCREMENTAL_STRATEGY_UNSPECIFIED"
     },
     {
       "type": "incremental",
@@ -107,6 +113,7 @@
       },
       "query": "\n\nSELECT\n  order_date,\n  COUNT(*) AS orders,\n  SUM(amount) AS revenue\nFROM `cost-check-sample.raw.orders`\n\nGROUP BY order_date\n",
       "disabled": false,
+      "protected": false,
       "fileName": "definitions/orders_daily.sqlx",
       "bigquery": {
         "partitionBy": "order_date"
@@ -124,12 +131,15 @@
         }
       ],
       "uniqueKey": ["order_date"],
+      "hermeticity": "NON_HERMETIC",
       "canonicalTarget": {
         "schema": "analytics",
         "name": "orders_daily",
         "database": "cost-check-sample"
       },
-      "enumType": "INCREMENTAL"
+      "enumType": "INCREMENTAL",
+      "onSchemaChange": "IGNORE",
+      "incrementalStrategy": "INCREMENTAL_STRATEGY_UNSPECIFIED"
     },
     {
       "type": "view",
@@ -151,6 +161,7 @@
           "database": "cost-check-sample"
         }
       ],
+      "hermeticity": "NON_HERMETIC",
       "canonicalTarget": {
         "schema": "analytics",
         "name": "orders_recent",
@@ -180,6 +191,7 @@
           "database": "cost-check-sample"
         }
       ],
+      "hermeticity": "NON_HERMETIC",
       "canonicalTarget": {
         "schema": "analytics",
         "name": "grant_readers",
@@ -203,6 +215,7 @@
           "database": "cost-check-sample"
         }
       ],
+      "hermeticity": "NON_HERMETIC",
       "canonicalTarget": {
         "schema": "analytics",
         "name": "drop_stale_orders",
@@ -262,7 +275,7 @@
       }
     }
   ],
-  "dataformCoreVersion": "3.0.0",
+  "dataformCoreVersion": "3.1.6",
   "targets": [
     {
       "schema": "analytics",
@@ -309,5 +322,6 @@
       "name": "orders",
       "database": "cost-check-sample"
     }
-  ]
+  ],
+  "jitData": {}
 }

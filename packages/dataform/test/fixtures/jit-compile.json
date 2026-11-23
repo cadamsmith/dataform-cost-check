@@ -1,0 +1,170 @@
+{
+  "tables": [
+    {
+      "type": "table",
+      "target": {
+        "schema": "analytics",
+        "name": "orders_jit",
+        "database": "cost-check-sample"
+      },
+      "disabled": false,
+      "fileName": "definitions/jit_actions.js",
+      "actionDescriptor": {
+        "compilationMode": "ACTION_COMPILATION_MODE_JIT"
+      },
+      "hermeticity": "NON_HERMETIC",
+      "canonicalTarget": {
+        "schema": "analytics",
+        "name": "orders_jit",
+        "database": "cost-check-sample"
+      },
+      "enumType": "TABLE",
+      "jitCode": "async (jctx) => ({ query: \"SELECT * FROM `cost-check-sample.raw.orders`\" })"
+    },
+    {
+      "type": "incremental",
+      "target": {
+        "schema": "analytics",
+        "name": "orders_jit_incremental",
+        "database": "cost-check-sample"
+      },
+      "disabled": false,
+      "protected": false,
+      "fileName": "definitions/jit_actions.js",
+      "actionDescriptor": {
+        "compilationMode": "ACTION_COMPILATION_MODE_JIT"
+      },
+      "hermeticity": "NON_HERMETIC",
+      "canonicalTarget": {
+        "schema": "analytics",
+        "name": "orders_jit_incremental",
+        "database": "cost-check-sample"
+      },
+      "enumType": "INCREMENTAL",
+      "onSchemaChange": "IGNORE",
+      "jitCode": "async (jctx) => ({ query: \"SELECT * FROM `cost-check-sample.raw.orders`\" })",
+      "incrementalStrategy": "INCREMENTAL_STRATEGY_UNSPECIFIED"
+    },
+    {
+      "type": "view",
+      "target": {
+        "schema": "analytics",
+        "name": "orders_jit_view",
+        "database": "cost-check-sample"
+      },
+      "disabled": false,
+      "fileName": "definitions/jit_actions.js",
+      "actionDescriptor": {
+        "compilationMode": "ACTION_COMPILATION_MODE_JIT"
+      },
+      "hermeticity": "NON_HERMETIC",
+      "canonicalTarget": {
+        "schema": "analytics",
+        "name": "orders_jit_view",
+        "database": "cost-check-sample"
+      },
+      "enumType": "VIEW",
+      "jitCode": "async (jctx) => ({ query: \"SELECT * FROM `cost-check-sample.raw.orders`\" })"
+    },
+    {
+      "type": "table",
+      "target": {
+        "schema": "analytics",
+        "name": "orders",
+        "database": "cost-check-sample"
+      },
+      "query": "\nSELECT order_id, customer_id, order_date FROM `cost-check-sample.raw.orders`\n",
+      "disabled": false,
+      "fileName": "definitions/orders.sqlx",
+      "hermeticity": "NON_HERMETIC",
+      "canonicalTarget": {
+        "schema": "analytics",
+        "name": "orders",
+        "database": "cost-check-sample"
+      },
+      "enumType": "TABLE"
+    },
+    {
+      "type": "table",
+      "target": {
+        "schema": "analytics",
+        "name": "orders_sqlx_jit",
+        "database": "cost-check-sample"
+      },
+      "disabled": false,
+      "fileName": "definitions/orders_sqlx_jit.sqlx",
+      "actionDescriptor": {
+        "compilationMode": "ACTION_COMPILATION_MODE_JIT"
+      },
+      "hermeticity": "NON_HERMETIC",
+      "canonicalTarget": {
+        "schema": "analytics",
+        "name": "orders_sqlx_jit",
+        "database": "cost-check-sample"
+      },
+      "enumType": "TABLE",
+      "jitCode": "async (jctx) => {\n    const self = jctx.self ? jctx.self.bind(jctx) : undefined;\n    const ref = jctx.ref ? jctx.ref.bind(jctx) : undefined;\n    const resolve = jctx.resolve ? jctx.resolve.bind(jctx) : undefined;\n    const name = jctx.name ? jctx.name.bind(jctx) : undefined;\n    const when = jctx.when ? jctx.when.bind(jctx) : undefined;\n    const incremental = jctx.incremental ? jctx.incremental.bind(jctx) : undefined;\n    const schema = jctx.schema ? jctx.schema.bind(jctx) : undefined;\n    const database = jctx.database ? jctx.database.bind(jctx) : undefined;\n    const adapter = jctx.adapter ? jctx.adapter : undefined;\n    const data = jctx.data ? jctx.data : undefined;\n    const executionData = jctx.executionData ? jctx.executionData : undefined;\n     return { query: \"SELECT * FROM `cost-check-sample.raw.orders`\" }; \n    return {\n        query: (\n          `\n\n`\n        ),\n        postOps: (\n          undefined\n        ),\n        preOps: (\n          undefined\n        ),\n      };\n    }"
+    }
+  ],
+  "operations": [
+    {
+      "target": {
+        "schema": "analytics",
+        "name": "refresh_jit",
+        "database": "cost-check-sample"
+      },
+      "fileName": "definitions/jit_actions.js",
+      "actionDescriptor": {
+        "compilationMode": "ACTION_COMPILATION_MODE_JIT"
+      },
+      "hermeticity": "NON_HERMETIC",
+      "canonicalTarget": {
+        "schema": "analytics",
+        "name": "refresh_jit",
+        "database": "cost-check-sample"
+      },
+      "jitCode": "async (jctx) => ({ queries: [\"SELECT 1\"] })"
+    }
+  ],
+  "projectConfig": {
+    "warehouse": "bigquery",
+    "defaultSchema": "analytics",
+    "defaultDatabase": "cost-check-sample",
+    "defaultLocation": "US"
+  },
+  "graphErrors": {},
+  "dataformCoreVersion": "3.1.6",
+  "targets": [
+    {
+      "schema": "analytics",
+      "name": "orders_jit",
+      "database": "cost-check-sample"
+    },
+    {
+      "schema": "analytics",
+      "name": "orders_jit_incremental",
+      "database": "cost-check-sample"
+    },
+    {
+      "schema": "analytics",
+      "name": "orders_jit_view",
+      "database": "cost-check-sample"
+    },
+    {
+      "schema": "analytics",
+      "name": "refresh_jit",
+      "database": "cost-check-sample"
+    },
+    {
+      "schema": "analytics",
+      "name": "orders",
+      "database": "cost-check-sample"
+    },
+    {
+      "schema": "analytics",
+      "name": "orders_sqlx_jit",
+      "database": "cost-check-sample"
+    }
+  ],
+  "jitData": {}
+}

@@ -1,5 +1,19 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`renderComment > lists a just-in-time action under Not estimated, without blaming a dry run 1`] = `
+"<!-- dataform-cost-check -->
+### Dataform Cost Check: BigQuery estimate
+
+None of the changed models were estimated.
+
+**Not estimated**
+
+- \`orders_jit\` (modified): Its SQL is generated when the workflow runs (just-in-time compilation), so a dry run cannot size it.
+
+<sub>Estimates are upper bounds from BigQuery dry runs, priced at $6.25 per TiB on-demand, with no free-tier deduction. Runs per day come from \`dataform-cost-check.yml\`, not from your schedules. If this project uses slot-based (Editions) pricing, bytes scanned do not map to dollars and these figures do not apply.</sub>
+"
+`;
+
 exports[`renderComment > renders a pull request with no model changes 1`] = `
 "<!-- dataform-cost-check -->
 ### Dataform Cost Check: BigQuery estimate

@@ -34,6 +34,7 @@ function sqlDiffers(a: Model, b: Model): boolean {
     a.type !== b.type ||
     a.query !== b.query ||
     a.incrementalQuery !== b.incrementalQuery ||
+    a.jitCode !== b.jitCode ||
     !sameStatements(a.preOps, b.preOps) ||
     !sameStatements(a.incrementalPreOps, b.incrementalPreOps)
   );

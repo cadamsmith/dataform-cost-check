@@ -66,7 +66,8 @@ export async function runCheck(deps: RunDeps): Promise<RunResult> {
  * that needed a dry run came back unestimable. That usually means a misconfigured project
  * (no `bigquery.jobs.create`, the API disabled, a wrong project ID) rather than a problem
  * with the SQL, and passing green would hide it. Models that read a table the same pull
- * request creates are left out of the count: their failure is expected and explained.
+ * request creates are left out of the count: their failure is expected and explained. So
+ * are models that were never dry-run (pre-operations blockers, JIT actions).
  * Returns undefined when at least one dry run succeeded or none was needed.
  */
 export function dryRunFailure(report: Report): string | undefined {
@@ -78,6 +79,7 @@ export function dryRunFailure(report: Report): string | undefined {
         (e.newUpstream !== undefined ||
           e.preOpsVariable !== undefined ||
           e.preOpsTempTable !== undefined ||
+          e.jit === true ||
           dropsRequiredFilter(e))
       ),
   );

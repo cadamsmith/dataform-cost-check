@@ -45996,7 +45996,7 @@ function diffModels(base, head, config) {
   return changes.sort((x2, y) => x2.target.localeCompare(y.target));
 }
 function sqlDiffers(a, b) {
-  return a.type !== b.type || a.query !== b.query || a.incrementalQuery !== b.incrementalQuery || !sameStatements(a.preOps, b.preOps) || !sameStatements(a.incrementalPreOps, b.incrementalPreOps);
+  return a.type !== b.type || a.query !== b.query || a.incrementalQuery !== b.incrementalQuery || a.jitCode !== b.jitCode || !sameStatements(a.preOps, b.preOps) || !sameStatements(a.incrementalPreOps, b.incrementalPreOps);
 }
 function pricingDiffers(a, b, config) {
   return runsPerDayFor(a, config) !== runsPerDayFor(b, config) || pricePerTibFor(a, config) !== pricePerTibFor(b, config);
@@ -46081,7 +46081,7 @@ ${model.incrementalQuery ?? ""}`;
 }
 function withViewReaders(changes, base, head) {
   const baseByTarget = new Map(base.map((m2) => [m2.target, m2]));
-  const isView = (m2) => m2?.type === "view";
+  const isView = (m2) => m2?.type === "view" && m2.jitCode === void 0;
   const baseDefs = /* @__PURE__ */ new Map();
   const headDefs = /* @__PURE__ */ new Map();
   for (const c of changes) {
@@ -46432,6 +46432,7 @@ function partitionFilterCause(base, head) {
   const table = (head.partitionedTables ?? []).find((t2) => baseTables.has(t2));
   return table === void 0 ? void 0 : { kind: "partition-filter-removed", table };
 }
+var JIT_REASON = "Its SQL is generated when the workflow runs (just-in-time compilation), so a dry run cannot size it.";
 var SKIP_REASONS = {
   view: "Views cost nothing to create; the cost lands on whatever reads them.",
   operations: "Custom operations are not estimated yet."
@@ -46493,6 +46494,17 @@ async function estimateChange(change, runner, config, newTargets = /* @__PURE__ 
   }
   const baseModel = change.kind === "modified" ? change.base : model;
   const involvesIncremental = base?.incrementalQuery !== void 0 || head?.incrementalQuery !== void 0;
+  if (base?.jitCode !== void 0 || head?.jitCode !== void 0) {
+    return {
+      status: "unestimable",
+      ...common,
+      ...(base?.type === "incremental" || head?.type === "incremental") && {
+        involvesIncremental: true
+      },
+      reason: JIT_REASON,
+      jit: true
+    };
+  }
   const rebuild = (baseBytes2, headBytes2) => baseBytes2 === void 0 || headBytes2 === void 0 ? void 0 : {
     baseBytes: baseBytes2,
     headBytes: headBytes2,
@@ -46845,7 +46857,8 @@ function toModel(action, type, location, query) {
   if (!schema || !name) {
     throw new Error(`Compiled action has no target: ${JSON.stringify(action.target)}`);
   }
-  if (query === void 0) {
+  const jit = action.jitCode !== void 0 && action.jitCode !== "";
+  if (query === void 0 && !jit) {
     throw new Error(`Compiled action ${schema}.${name} has no query`);
   }
   return {
@@ -46854,7 +46867,8 @@ function toModel(action, type, location, query) {
     // `runs_per_day` entries from matching.
     name: action.canonicalTarget?.name ?? name,
     type,
-    query,
+    query: query ?? "",
+    ...jit && { jitCode: action.jitCode },
     ...action.incrementalQuery !== void 0 && { incrementalQuery: action.incrementalQuery },
     ...action.preOps !== void 0 && action.preOps.length > 0 && { preOps: action.preOps },
     ...action.incrementalPreOps !== void 0 && action.incrementalPreOps.length > 0 && { incrementalPreOps: action.incrementalPreOps },
@@ -47119,7 +47133,7 @@ async function runCheck(deps) {
 }
 function dryRunFailure(report) {
   const tried = report.estimates.filter(
-    (e2) => e2.status !== "skipped" && !(e2.status === "unestimable" && (e2.newUpstream !== void 0 || e2.preOpsVariable !== void 0 || e2.preOpsTempTable !== void 0 || dropsRequiredFilter(e2)))
+    (e2) => e2.status !== "skipped" && !(e2.status === "unestimable" && (e2.newUpstream !== void 0 || e2.preOpsVariable !== void 0 || e2.preOpsTempTable !== void 0 || e2.jit === true || dropsRequiredFilter(e2)))
   );
   const failed = tried.filter((e2) => e2.status === "unestimable");
   const first = failed[0];

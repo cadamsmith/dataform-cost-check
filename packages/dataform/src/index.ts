@@ -80,6 +80,8 @@ interface CompiledAction {
   };
   /** Dataform 3.1+: `INSERT_OVERWRITE` replaces partitions instead of merging on the key. */
   readonly incrementalStrategy?: string;
+  /** Just-in-time actions: the code that builds the SQL at run time. No `query` or `queries`. */
+  readonly jitCode?: string;
 }
 
 interface CompilationErrorEntry {
@@ -217,7 +219,8 @@ function toModel(
   if (!schema || !name) {
     throw new Error(`Compiled action has no target: ${JSON.stringify(action.target)}`);
   }
-  if (query === undefined) {
+  const jit = action.jitCode !== undefined && action.jitCode !== "";
+  if (query === undefined && !jit) {
     throw new Error(`Compiled action ${schema}.${name} has no query`);
   }
   return {
@@ -226,7 +229,8 @@ function toModel(
     // `runs_per_day` entries from matching.
     name: action.canonicalTarget?.name ?? name,
     type,
-    query,
+    query: query ?? "",
+    ...(jit && { jitCode: action.jitCode }),
     ...(action.incrementalQuery !== undefined && { incrementalQuery: action.incrementalQuery }),
     ...(action.preOps !== undefined && action.preOps.length > 0 && { preOps: action.preOps }),
     ...(action.incrementalPreOps !== undefined &&
@@ -261,6 +265,8 @@ function toModel(
  *   `projectConfig.defaultLocation`. When the project sets none, models carry no location
  *   and BigQuery picks it from the datasets each query reads.
  * - Operations hold one query per statement; they are joined into one script.
+ * - Just-in-time actions carry `jitCode` and no SQL; they become models with an empty
+ *   query and `jitCode` set, which core reports as not estimated.
  */
 export function parseCompileOutput(compiled: unknown): Model[] {
   if (typeof compiled !== "object" || compiled === null) {

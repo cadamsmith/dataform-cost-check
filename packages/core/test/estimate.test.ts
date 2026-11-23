@@ -3,6 +3,7 @@ import {
   BYTES_PER_TIB,
   DEFAULT_CONFIG,
   FakeDryRunner,
+  JIT_REASON,
   PARTITION_JUMP_MIN_BYTES,
   PARTITION_JUMP_RATIO,
   buildReport,
@@ -940,5 +941,73 @@ describe("full refresh estimate, pre_operations", () => {
       config,
     );
     expect(report.fullRefresh).toEqual({ baseUsd: 6.25, headUsd: 6.25, leftOut: 1 });
+  });
+});
+
+describe("just-in-time actions", () => {
+  const TIB = BYTES_PER_TIB;
+  const jit = (name: string, type: Model["type"] = "table") =>
+    model({ name, type, query: "", jitCode: "async (c) => ({ query: 'x' })" });
+
+  it("reports a JIT table as not estimated, without a dry run", async () => {
+    const head = jit("j");
+    const runner = new FakeDryRunner();
+    const e = await estimateChange({ kind: "added", target: head.target, head }, runner, config);
+    expect(e).toMatchObject({ status: "unestimable", jit: true, reason: JIT_REASON });
+    expect(e).not.toHaveProperty("errorKind");
+    expect(runner.calls).toEqual([]);
+  });
+
+  it("does not show a table becoming JIT as a saving", async () => {
+    const base = model({ name: "j", query: "table-old" });
+    const head = { ...jit("j"), target: base.target };
+    const runner = new FakeDryRunner([["table-old", { bytes: TIB }]]);
+    const e = await estimateChange(
+      { kind: "modified", target: base.target, base, head },
+      runner,
+      config,
+    );
+    expect(e).toMatchObject({ status: "unestimable", jit: true });
+    expect(runner.calls).toEqual([]);
+  });
+
+  it("skips a JIT view like any view", async () => {
+    const head = jit("v", "view");
+    const e = await estimateChange(
+      { kind: "added", target: head.target, head },
+      new FakeDryRunner(),
+      config,
+    );
+    expect(e).toMatchObject({ status: "skipped" });
+  });
+
+  it("counts a JIT incremental's rebuild as left out of the full refresh line", async () => {
+    const base = model({
+      name: "i",
+      type: "incremental",
+      query: "full-old",
+      incrementalQuery: "incr-old",
+    });
+    const head = { ...base, query: "full-new", incrementalQuery: "incr-new" };
+    const runner = new FakeDryRunner([
+      ["full-old", { bytes: 2 * TIB }],
+      ["full-new", { bytes: 3 * TIB }],
+      ["incr-old", { bytes: 1 }],
+      ["incr-new", { bytes: 2 }],
+    ]);
+    const j = jit("ji", "incremental");
+    const report = await estimateChanges(
+      [
+        { kind: "modified", target: base.target, base, head },
+        { kind: "added", target: j.target, head: j },
+      ],
+      runner,
+      config,
+    );
+    expect(report.estimates.find((e) => e.name === "ji")).toMatchObject({
+      status: "unestimable",
+      involvesIncremental: true,
+    });
+    expect(report.fullRefresh).toMatchObject({ baseUsd: 12.5, headUsd: 18.75, leftOut: 1 });
   });
 });

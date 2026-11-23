@@ -13,7 +13,10 @@ export interface Model {
   /** Short name used for display and `runs_per_day` overrides, e.g. `orders_daily`. */
   readonly name: string;
   readonly type: ModelType;
-  /** The compiled query. For incremental models, the full-refresh query. */
+  /**
+   * The compiled query. For incremental models, the full-refresh query. Empty for a JIT
+   * action (`jitCode`), whose SQL Dataform generates only when the workflow runs.
+   */
   readonly query: string;
   /** Incremental models only: the compiled incremental (steady-state) query. */
   readonly incrementalQuery?: string;
@@ -40,6 +43,13 @@ export interface Model {
    */
   readonly insertOverwrite?: boolean;
   readonly tags: readonly string[];
+  /**
+   * Set for a just-in-time action (Dataform 3: `.jitCode()` in JavaScript, or
+   * `compilation_mode: "jit"` in SQLX): the JavaScript that builds its SQL at run time. The
+   * compiled output carries no query, so a dry run cannot size it. Compared between base and
+   * head so an edit still counts as a change; never rendered.
+   */
+  readonly jitCode?: string;
   /**
    * BigQuery location the query runs in, e.g. `US` or `europe-west2`. Absent when the
    * project sets none; BigQuery then picks the location from the datasets the query reads.
@@ -240,6 +250,11 @@ export type Estimate =
        * exists only inside Dataform's script, so the query alone is not dry-run.
        */
       readonly preOpsTempTable?: string;
+      /**
+       * True when either side is a JIT action (`Model.jitCode`): its SQL exists only at run
+       * time, so no dry run is tried.
+       */
+      readonly jit?: boolean;
       /**
        * One full rebuild, before and after, when it could be sized even though the
        * steady state could not: a new incremental's first run, or an incremental whose

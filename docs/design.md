@@ -170,6 +170,18 @@ reports "not estimated" with a reason.
   pre-operations create (`CREATE TEMP TABLE scope AS ...`, `core.preOpsTempTableIn`): it
   exists only inside Dataform's script, so the query alone fails on the unknown name.
   Pre-operations are part of the diff, so changing them alone counts as a change.
+- **Just-in-time actions.** Dataform 3 can build an action's SQL when the workflow runs
+  (`.jitCode()` in JavaScript, or `compilation_mode: "jit"` in SQLX). `dataform compile --json`
+  then carries the code (`jitCode`) and no `query` or `queries`. Checked 2026-11-23: with CLI
+  3.0.61 for a JavaScript table and operation; with 3.1.6 for those, plus an incremental, a
+  view and a SQLX `compilation_mode: "jit"` table. The adapter used to stop
+  the whole check on these ("has no query"), so one JIT action anywhere failed every pull
+  request. Now each becomes a model with an empty query and `Model.jitCode`, and is reported
+  as not estimated (`Estimate.jit`), never dry-run, and left out of the "every dry run fails"
+  count. A table that becomes JIT is not shown as a saving. A JIT view is skipped like any
+  view, but is never inlined into its readers, which keep reading the live view. The diff
+  compares the code, so an edit counts as a change; the code is never rendered. Its rebuild
+  counts as left out of the full refresh line.
 - **New upstream tables.** A dry run fails when the SQL references a table the same PR
   creates. Report it plainly as not estimated; do not guess. When a head dry run fails and
   the query quotes the target of a model the PR adds (`core.readsNewTarget`), the reason

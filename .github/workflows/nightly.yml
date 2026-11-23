@@ -125,7 +125,7 @@ jobs:
           examples/trends-demo/run.sh --project "$GCP_PROJECT" --limit 1 | tee "$RUNNER_TEMP/out.txt"
           # The demo drops a partition filter on a public table: the estimate must go over
           # the limit, name the cause, and fail the check.
-          grep -q 'Over the \$1.00 limit' "$RUNNER_TEMP/out.txt"
+          grep -qF "Over the \$1.00 limit" "$RUNNER_TEMP/out.txt"
           grep -q 'likely cause: a filter on the partitioned table' "$RUNNER_TEMP/out.txt"
           grep -q 'Check exit code: 1' "$RUNNER_TEMP/out.txt"
 

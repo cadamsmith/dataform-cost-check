@@ -10,6 +10,8 @@ import {
   estimateChange,
   estimateChanges,
   limitCannotApply,
+  mergeSql,
+  monthlyCost,
   partitionFilterCause,
   preOpsTempTableIn,
   preOpsVariableIn,
@@ -416,14 +418,18 @@ describe("new incremental models", () => {
 });
 
 describe("unique-key incremental models", () => {
-  it("carries the MERGE flag onto the estimate", async () => {
-    const m = model({
-      name: "m",
-      type: "incremental",
-      query: "q",
-      incrementalQuery: "iq",
-      merge: { partitionFiltered: false },
+  const key = { uniqueKey: ["id"] };
+  const table = { columns: ["id", "v"], bytes: 1000 };
+  const merging = (iq: string, merge: Model["merge"] = key) =>
+    model({ name: "m", type: "incremental", query: "q", incrementalQuery: iq, merge });
+  const mergeOf = (m: Model) =>
+    mergeSql(m.target, table.columns, m.incrementalQuery ?? "", ["id"], {
+      updatePartitionFilter: m.merge?.updatePartitionFilter,
+      incrementalPredicates: m.merge?.incrementalPredicates,
     });
+
+  it("sizes from the query alone when the table cannot be looked up", async () => {
+    const m = merging("iq");
     const e = await estimateChange(
       { kind: "added", target: m.target, head: m },
       new FakeDryRunner([
@@ -434,21 +440,17 @@ describe("unique-key incremental models", () => {
     );
     expect(e).toMatchObject({
       status: "estimated",
-      merge: { partitionFiltered: false, readsOwnTable: false },
+      headBytes: 1,
+      merge: { partitionFiltered: false, readsOwnTable: false, sizing: { by: "query" } },
     });
   });
 
   it("notes when the incremental query reads the model's own table", async () => {
-    const m = model({
-      name: "m",
-      type: "incremental",
-      query: "q",
-      merge: { partitionFiltered: true },
-    });
-    const iq = `SELECT * FROM src WHERE d > (SELECT MAX(d) FROM \`${m.target}\`)`;
-    const withSelf = { ...m, incrementalQuery: iq };
+    const base = merging("x", { ...key, updatePartitionFilter: "d > '2026-01-01'" });
+    const iq = `SELECT * FROM src WHERE d > (SELECT MAX(d) FROM \`${base.target}\`)`;
+    const withSelf = { ...base, incrementalQuery: iq };
     const e = await estimateChange(
-      { kind: "modified", target: m.target, base: withSelf, head: withSelf },
+      { kind: "modified", target: base.target, base: withSelf, head: withSelf },
       new FakeDryRunner([
         [iq, { bytes: 1 }],
         ["q", { bytes: 2 }],
@@ -456,6 +458,133 @@ describe("unique-key incremental models", () => {
       config,
     );
     expect(e).toMatchObject({ merge: { partitionFiltered: true, readsOwnTable: true } });
+  });
+
+  it("uses a dry run of the MERGE on both sides when it succeeds", async () => {
+    const base = merging("old");
+    const head = merging("new");
+    const e = await estimateChange(
+      { kind: "modified", target: head.target, base, head },
+      new FakeDryRunner(
+        [
+          ["old", { bytes: 10 }],
+          ["new", { bytes: 20 }],
+          [mergeOf(base), { bytes: 1010 }],
+          [mergeOf(head), { bytes: BYTES_PER_TIB }],
+          ["q", { bytes: 2 }],
+        ],
+        undefined,
+        [[head.target, table]],
+      ),
+      config,
+    );
+    expect(e).toMatchObject({
+      status: "estimated",
+      baseBytes: 1010,
+      headBytes: BYTES_PER_TIB,
+      merge: { sizing: { by: "merge" } },
+    });
+    if (e.status !== "estimated") throw new Error("not estimated");
+    expect(e.monthlyDelta).toBeCloseTo(
+      monthlyCost(BYTES_PER_TIB, e.pricePerTib, 1) - monthlyCost(1010, e.pricePerTib, 1),
+    );
+  });
+
+  it("passes the update filter and incremental predicates into the MERGE", async () => {
+    const head = merging("new", {
+      ...key,
+      updatePartitionFilter: "d > '2026-01-01'",
+      incrementalPredicates: ["DATAFORM_DEST.v > 0"],
+    });
+    const runner = new FakeDryRunner(
+      [
+        ["new", { bytes: 20 }],
+        [mergeOf(head), { bytes: 30 }],
+        ["q", { bytes: 2 }],
+      ],
+      undefined,
+      [[head.target, table]],
+    );
+    const e = await estimateChange({ kind: "added", target: head.target, head }, runner, config);
+    expect(e).toMatchObject({ headBytes: 30, merge: { sizing: { by: "merge" } } });
+    expect(runner.calls.map((c) => c.sql)).toContain(mergeOf(head));
+    expect(mergeOf(head)).toContain("and DATAFORM_DEST.d > '2026-01-01'");
+    expect(mergeOf(head)).toContain("and (DATAFORM_DEST.v > 0)");
+  });
+
+  it("gives a range up to the whole table when the MERGE dry run is denied", async () => {
+    const base = merging("old");
+    const head = merging("new");
+    const e = await estimateChange(
+      { kind: "modified", target: head.target, base, head },
+      new FakeDryRunner(
+        [
+          ["old", { bytes: 10 }],
+          ["new", { bytes: 20 }],
+          ["q", { bytes: 2 }],
+        ],
+        { error: "Permission bigquery.tables.updateData denied", errorKind: "permission-denied" },
+        [[head.target, table]],
+      ),
+      config,
+    );
+    expect(e).toMatchObject({
+      status: "estimated",
+      baseBytes: 10,
+      headBytes: 20,
+      merge: {
+        sizing: {
+          by: "range",
+          fromBytes: 20,
+          toBytes: 1020,
+          errorKind: "permission-denied",
+          detail: "Permission bigquery.tables.updateData denied",
+        },
+      },
+    });
+  });
+
+  it("flags an insert-overwrite incremental as a lower bound", async () => {
+    const m = model({
+      name: "m",
+      type: "incremental",
+      query: "q",
+      incrementalQuery: "iq",
+      insertOverwrite: true,
+    });
+    const e = await estimateChange(
+      { kind: "added", target: m.target, head: m },
+      new FakeDryRunner([
+        ["iq", { bytes: 1 }],
+        ["q", { bytes: 2 }],
+      ]),
+      config,
+    );
+    expect(e).toMatchObject({ status: "estimated", headBytes: 1, insertOverwrite: true });
+    expect(e).not.toHaveProperty("merge");
+  });
+
+  it("sizes the base MERGE when the pull request drops the unique key", async () => {
+    const base = merging("iq");
+    const head = model({ name: "m", type: "incremental", query: "q", incrementalQuery: "iq" });
+    const e = await estimateChange(
+      { kind: "modified", target: head.target, base, head },
+      new FakeDryRunner(
+        [
+          ["iq", { bytes: 20 }],
+          [mergeOf(base), { bytes: 1020 }],
+          ["q", { bytes: 2 }],
+        ],
+        undefined,
+        [[head.target, table]],
+      ),
+      config,
+    );
+    expect(e).toMatchObject({
+      baseBytes: 1020,
+      headBytes: 20,
+      merge: { baseOnly: true, sizing: { by: "merge" } },
+    });
   });
 });
 

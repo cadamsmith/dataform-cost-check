@@ -22,10 +22,23 @@ export interface Model {
   /** Incremental models only: statements run before `incrementalQuery`. */
   readonly incrementalPreOps?: readonly string[];
   /**
-   * Incremental models with a `uniqueKey`: each run is a MERGE into the existing table.
-   * `partitionFiltered` is true when `updatePartitionFilter` limits what it reads.
+   * Incremental models with a `uniqueKey` (and the default MERGE strategy, not
+   * `INSERT_OVERWRITE`): each run is a MERGE into the existing table, on these key columns,
+   * with `updatePartitionFilter` and `incrementalPredicates` (when set) limiting the
+   * target rows.
    */
-  readonly merge?: { readonly partitionFiltered: boolean };
+  readonly merge?: {
+    readonly uniqueKey: readonly string[];
+    readonly updatePartitionFilter?: string;
+    /** Extra conditions on the target (`bigquery.incrementalPredicates`, Dataform 3.1+). */
+    readonly incrementalPredicates?: readonly string[];
+  };
+  /**
+   * Incremental models with `incrementalStrategy: INSERT_OVERWRITE` (Dataform 3.1+): each
+   * run stages the query's rows, then replaces the matching partitions of the existing
+   * table with a MERGE, which also reads that table. Not sized beyond the query.
+   */
+  readonly insertOverwrite?: boolean;
   readonly tags: readonly string[];
   /**
    * BigQuery location the query runs in, e.g. `US` or `europe-west2`. Absent when the
@@ -91,7 +104,40 @@ export type DryRunErrorKind =
 export interface DryRunner {
   /** `location` undefined means "let BigQuery choose from the referenced datasets". */
   estimate(sql: string, location: string | undefined): Promise<DryRunResult>;
+  /**
+   * An existing table's top-level columns and logical size, as `project.dataset.table`.
+   * Undefined when it does not exist or cannot be read. Optional: without it, MERGE
+   * incrementals are sized from their query alone.
+   */
+  table?(target: string): Promise<TableInfo | undefined>;
 }
+
+/** What a MERGE estimate needs to know about the existing target table. */
+export interface TableInfo {
+  readonly columns: readonly string[];
+  /** Logical bytes, what an on-demand scan of every column would bill. */
+  readonly bytes: number;
+}
+
+/**
+ * How a unique-key incremental's MERGE was sized. `merge`: a dry run of the MERGE
+ * statement Dataform runs, read of the existing table included, so the figure is exact.
+ * `range`: that dry run failed (it needs write access to the table), so the figure is
+ * the query alone, and a run reads between `fromBytes` and `toBytes` (the query plus the
+ * whole table). `query`: the table could not be looked up (say it does not exist yet), so
+ * the figure is the query alone, a lower bound.
+ */
+export type MergeSizing =
+  | { readonly by: "merge" }
+  | {
+      readonly by: "range";
+      readonly fromBytes: number;
+      readonly toBytes: number;
+      readonly errorKind: DryRunErrorKind;
+      /** BigQuery's message, for the job log only. */
+      readonly detail: string;
+    }
+  | { readonly by: "query" };
 
 /** Most likely reason for a cost jump, when a heuristic can tell. */
 export interface LikelyCause {
@@ -138,14 +184,22 @@ export type Estimate =
       readonly involvesIncremental?: boolean;
       /** The changed views this model reads, when that is the only reason it is listed. */
       readonly viaViews?: readonly string[];
+      /** Head (base, if removed) replaces partitions (`Model.insertOverwrite`): a lower bound. */
+      readonly insertOverwrite?: boolean;
       /**
        * Incremental models with a `uniqueKey`: the run is a MERGE that also reads the
-       * existing table, which the dry run of the SELECT does not count. `readsOwnTable` is
+       * existing table. `sizing` says whether that read is counted. `readsOwnTable` is
        * true when the incremental query reads the model's own table (say a `MAX(...)` from
-       * `self()`): BigQuery then reads the whole table, and `updatePartitionFilter` does not
-       * limit it (measured 2026-11-23).
+       * `self()`): `updatePartitionFilter` then does not limit the read (measured
+       * 2026-11-23).
        */
-      readonly merge?: { readonly partitionFiltered: boolean; readonly readsOwnTable: boolean };
+      readonly merge?: {
+        readonly partitionFiltered: boolean;
+        readonly readsOwnTable: boolean;
+        readonly sizing: MergeSizing;
+        /** Only the base version has a unique key: this pull request drops it. */
+        readonly baseOnly?: boolean;
+      };
     }
   | {
       /** Deliberately not estimated, e.g. views or custom operations. */

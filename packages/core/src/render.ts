@@ -238,6 +238,11 @@ function notesFor(e: Estimated): string[] {
       ? []
       : [`- \`${e.name}\`: likely cause: ${causeText(e.likelyCause)}.`]),
     ...(e.merge === undefined ? [] : [mergeNote(e.name, e.merge)]),
+    ...(e.insertOverwrite === true
+      ? [
+          `- \`${e.name}\`: replaces partitions (\`INSERT_OVERWRITE\`), so each run also runs a MERGE that reads part of the existing table. Those bytes are not included, so this model's figure is a lower bound.`,
+        ]
+      : []),
     ...(e.fullRefreshBytes === undefined
       ? []
       : [
@@ -355,22 +360,32 @@ export function formatUsd(amount: number, { signed = false }: { signed?: boolean
   return `${sign}$${body}`;
 }
 
-/** The MERGE's read of the existing table, which the dry run of the SELECT leaves out. */
-function mergeNote(
-  name: string,
-  merge: { readonly partitionFiltered: boolean; readonly readsOwnTable: boolean },
-): string {
-  const start = `- \`${name}\`: has a unique key, so each run is a MERGE that also reads`;
-  const end = "Those bytes are not included, so this model's figure is a lower bound.";
-  if (merge.readsOwnTable) {
-    // Measured 2026-11-23: with the query reading the table, BigQuery read all of it,
-    // whatever the update filter.
-    const filter = merge.partitionFiltered
-      ? " Its `updatePartitionFilter` does not limit that read, because the query also reads this table."
-      : "";
-    return `${start} the whole existing table. ${end}${filter}`;
+/** How the MERGE's read of the existing table was counted (`Estimate.merge.sizing`). */
+function mergeNote(name: string, merge: NonNullable<Estimated["merge"]>): string {
+  const start =
+    merge.baseOnly === true
+      ? `- \`${name}\`: had a unique key before this change, so each run at base is a MERGE`
+      : `- \`${name}\`: has a unique key, so each run is a MERGE`;
+  if (merge.sizing.by === "merge") {
+    return `${start}. Sized by a dry run of that MERGE, including its read of the existing table.`;
   }
-  return merge.partitionFiltered
-    ? `${start} the table's partitions matching its update filter. ${end}`
-    : `${start} the whole existing table. ${end} An \`updatePartitionFilter\` limits that read.`;
+  const reads = `${start} that also reads part or all of the existing table.`;
+  if (merge.sizing.by === "range") {
+    const why =
+      merge.sizing.errorKind === "permission-denied"
+        ? "A dry run of the MERGE needs write access to the table, which the check's account does not have"
+        : "The dry run of the MERGE failed (BigQuery's message is in the job log)";
+    return `${reads} ${why}, so ${merge.baseOnly === true ? "the base figure" : "this model's figure"} covers its query alone: each run reads between ${formatBytes(merge.sizing.fromBytes)} and ${formatBytes(merge.sizing.toBytes)} (with the whole table).`;
+  }
+  // Measured 2026-11-23: with the query reading the table, the update filter did not limit
+  // the read.
+  const filter = merge.readsOwnTable
+    ? merge.partitionFiltered
+      ? " Its `updatePartitionFilter` does not limit that read, because the query also reads this table."
+      : ""
+    : merge.partitionFiltered
+      ? ""
+      : " An `updatePartitionFilter` can limit that read.";
+  const figure = merge.baseOnly === true ? "the base figure" : "this model's figure";
+  return `${reads} Those bytes are not included, so ${figure} is a lower bound.${filter}`;
 }

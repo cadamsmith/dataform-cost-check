@@ -1,5 +1,10 @@
 import { GoogleAuth } from "google-auth-library";
-import type { DryRunErrorKind, DryRunResult, DryRunner } from "@dataform-cost-check/core";
+import type {
+  DryRunErrorKind,
+  DryRunResult,
+  DryRunner,
+  TableInfo,
+} from "@dataform-cost-check/core";
 
 const BIGQUERY_SCOPE = "https://www.googleapis.com/auth/bigquery";
 const API_ROOT = "https://bigquery.googleapis.com/bigquery/v2";
@@ -136,6 +141,39 @@ export class BigQueryDryRunner implements DryRunner {
       job.statistics?.query?.referencedTables ?? [],
     );
     return { bytes: Number(bytes), partitionedTables };
+  }
+
+  /**
+   * The existing table's top-level columns and logical size, for sizing a MERGE. Reads
+   * metadata only (`tables.get`, free). Undefined when the table does not exist, is not a
+   * table, or the lookup fails for any reason: the model is then sized from its query.
+   */
+  async table(target: string): Promise<TableInfo | undefined> {
+    const parts = target.split(".");
+    if (parts.length < 2) return undefined;
+    const table = parts.at(-1) ?? "";
+    const dataset = parts.at(-2) ?? "";
+    // A domain-scoped project (`example.com:project`) has a dot of its own.
+    const project = parts.length > 2 ? parts.slice(0, -2).join(".") : this.#projectId;
+    try {
+      const e = encodeURIComponent;
+      const response = await this.#fetch(
+        `${API_ROOT}/projects/${e(project)}/datasets/${e(dataset)}/tables/${e(table)}?fields=type,numBytes,schema/fields/name`,
+        { headers: { authorization: `Bearer ${await this.#getAccessToken()}` } },
+      );
+      if (!response.ok) return undefined;
+      const meta = (await response.json()) as {
+        type?: string;
+        numBytes?: string;
+        schema?: { fields?: readonly { name?: string }[] };
+      };
+      const columns = (meta.schema?.fields ?? []).flatMap((f) => (f.name ? [f.name] : []));
+      if (meta.type !== "TABLE" || columns.length === 0) return undefined;
+      if (meta.numBytes === undefined || !/^\d+$/.test(meta.numBytes)) return undefined;
+      return { columns, bytes: Number(meta.numBytes) };
+    } catch {
+      return undefined;
+    }
   }
 
   /**

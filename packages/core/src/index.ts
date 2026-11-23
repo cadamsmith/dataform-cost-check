@@ -7,3 +7,4 @@ export * from "./estimate.ts";
 export * from "./render.ts";
 export { FakeDryRunner } from "./fake-dry-runner.ts";
 export { limitConcurrency } from "./limit-concurrency.ts";
+export { mergeSql } from "./merge.ts";

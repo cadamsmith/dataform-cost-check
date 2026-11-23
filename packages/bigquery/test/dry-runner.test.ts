@@ -210,4 +210,47 @@ describe("BigQueryDryRunner", () => {
       expect(urls.filter((u) => u.includes("/tables/"))).toHaveLength(1);
     });
   });
+
+  describe("table", () => {
+    function runnerAnswering(status: number, body: unknown) {
+      const { runner, calls } = runnerReturning(status, body);
+      return { runner, urls: () => calls.map((c) => c.url) };
+    }
+    const meta = {
+      type: "TABLE",
+      numBytes: "2448008668",
+      schema: { fields: [{ name: "refresh_date" }, { name: "term" }] },
+    };
+
+    it("returns the columns and logical size from tables.get", async () => {
+      const { runner, urls } = runnerAnswering(200, meta);
+      await expect(runner.table("p.raw.events")).resolves.toEqual({
+        columns: ["refresh_date", "term"],
+        bytes: 2448008668,
+      });
+      expect(urls()).toEqual([
+        "https://bigquery.googleapis.com/bigquery/v2/projects/p/datasets/raw/tables/events?fields=type,numBytes,schema/fields/name",
+      ]);
+    });
+
+    it("keeps a domain-scoped project whole, and defaults a missing one", async () => {
+      const scoped = runnerAnswering(200, meta);
+      await scoped.runner.table("example.com:proj.raw.events");
+      expect(scoped.urls()[0]).toContain("/projects/example.com%3Aproj/datasets/raw/tables/events");
+      const bare = runnerAnswering(200, meta);
+      await bare.runner.table("raw.events");
+      expect(bare.urls()[0]).toContain("/projects/test-project/datasets/raw/tables/events");
+    });
+
+    it("is undefined for a missing table, a view, or a broken answer", async () => {
+      await expect(runnerAnswering(404, {}).runner.table("p.raw.gone")).resolves.toBeUndefined();
+      await expect(
+        runnerAnswering(200, { ...meta, type: "VIEW" }).runner.table("p.raw.v"),
+      ).resolves.toBeUndefined();
+      await expect(
+        runnerAnswering(200, { type: "TABLE", schema: meta.schema }).runner.table("p.raw.t"),
+      ).resolves.toBeUndefined();
+      await expect(runnerAnswering(403, {}).runner.table("p.raw.secret")).resolves.toBeUndefined();
+    });
+  });
 });

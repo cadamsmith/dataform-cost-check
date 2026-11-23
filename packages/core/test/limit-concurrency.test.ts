@@ -54,6 +54,32 @@ describe("limitConcurrency", () => {
     await expect(limited.estimate("b", undefined)).resolves.toEqual({ bytes: 3 });
   });
 
+  it("passes table lookups through, within the same limit", async () => {
+    const gated = gatedRunner();
+    let lookups = 0;
+    const limited = limitConcurrency(
+      {
+        ...gated.runner,
+        table: () => {
+          lookups++;
+          return Promise.resolve({ columns: ["id"], bytes: 5 });
+        },
+      },
+      1,
+    );
+    const run = limited.estimate("SELECT 1", "US");
+    const lookup = limited.table?.("p.d.t");
+    await tick();
+    expect(lookups).toBe(0);
+    gated.releaseAll();
+    await run;
+    await expect(lookup).resolves.toEqual({ columns: ["id"], bytes: 5 });
+  });
+
+  it("has no table lookup when the runner has none", () => {
+    expect("table" in limitConcurrency(gatedRunner().runner, 1)).toBe(false);
+  });
+
   it("rejects a non-positive limit", () => {
     expect(() => limitConcurrency(gatedRunner().runner, 0)).toThrow(RangeError);
   });

@@ -1,4 +1,4 @@
-import type { DryRunResult, DryRunner } from "./types.ts";
+import type { DryRunResult, DryRunner, TableInfo } from "./types.ts";
 
 /**
  * Wrap a DryRunner so at most `max` dry runs are in flight at once. `estimateChanges`
@@ -10,16 +10,23 @@ export function limitConcurrency(runner: DryRunner, max: number): DryRunner {
   let active = 0;
   const waiting: (() => void)[] = [];
 
+  async function limited<T>(call: () => Promise<T>): Promise<T> {
+    if (active >= max) await new Promise<void>((resolve) => waiting.push(resolve));
+    active++;
+    try {
+      return await call();
+    } finally {
+      active--;
+      waiting.shift()?.();
+    }
+  }
+
+  const table = runner.table?.bind(runner);
   return {
-    async estimate(sql: string, location: string | undefined): Promise<DryRunResult> {
-      if (active >= max) await new Promise<void>((resolve) => waiting.push(resolve));
-      active++;
-      try {
-        return await runner.estimate(sql, location);
-      } finally {
-        active--;
-        waiting.shift()?.();
-      }
-    },
+    estimate: (sql: string, location: string | undefined): Promise<DryRunResult> =>
+      limited(() => runner.estimate(sql, location)),
+    ...(table !== undefined && {
+      table: (target: string): Promise<TableInfo | undefined> => limited(() => table(target)),
+    }),
   };
 }

@@ -152,7 +152,8 @@ updates it on every push:
   from scratch, before and after, kept out of the monthly figure;
 - a table of changed models, with bytes scanned per run before and after;
 - notes: a removed partition filter named as the likely cause, a changed view's readers
-  re-estimated, merge-style models flagged as lower bounds;
+  re-estimated, unique-key (MERGE) models sized exactly or given as a range (see
+  Permissions in the README);
 - **Not estimated**, with a plain reason for anything it can't price (for example, a query
   that filters on a variable set in `pre_operations`).
 

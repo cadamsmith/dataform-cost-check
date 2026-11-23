@@ -307,32 +307,98 @@ describe("refresh history", () => {
 });
 
 describe("unique-key incremental models", () => {
+  type Merge = NonNullable<Extract<Estimate, { status: "estimated" }>["merge"]>;
   const merged: Estimate = {
     ...customers,
     name: "orders_merge",
-    merge: { partitionFiltered: false, readsOwnTable: false },
+    merge: { partitionFiltered: false, readsOwnTable: false, sizing: { by: "query" } },
   };
-  const note = (merge: { partitionFiltered: boolean; readsOwnTable: boolean }) =>
+  const note = (merge: Merge) =>
     renderComment(report({ estimates: [{ ...merged, merge }], totalMonthlyDelta: 0.92 }))
       .split("\n")
       .find((line) => line.startsWith("- `orders_merge`: has a unique key"));
+  const start = "- `orders_merge`: has a unique key, so each run is a MERGE";
+  const reads = `${start} that also reads part or all of the existing table.`;
   const lowerBound = "Those bytes are not included, so this model's figure is a lower bound.";
+  const query = { by: "query" } as const;
 
-  it("says the MERGE's read of the existing table is not included", () => {
-    expect(note({ partitionFiltered: false, readsOwnTable: false })).toBe(
-      `- \`orders_merge\`: has a unique key, so each run is a MERGE that also reads the whole existing table. ${lowerBound} An \`updatePartitionFilter\` limits that read.`,
-    );
-    expect(note({ partitionFiltered: true, readsOwnTable: false })).toBe(
-      `- \`orders_merge\`: has a unique key, so each run is a MERGE that also reads the table's partitions matching its update filter. ${lowerBound}`,
+  it("says the figure is exact when the MERGE itself was dry-run", () => {
+    expect(note({ partitionFiltered: true, readsOwnTable: true, sizing: { by: "merge" } })).toBe(
+      `${start}. Sized by a dry run of that MERGE, including its read of the existing table.`,
     );
   });
 
-  it("says the whole table is read when the query reads its own table", () => {
-    expect(note({ partitionFiltered: false, readsOwnTable: true })).toBe(
-      `- \`orders_merge\`: has a unique key, so each run is a MERGE that also reads the whole existing table. ${lowerBound}`,
+  it("gives the range when the MERGE dry run was denied or failed", () => {
+    const range = {
+      by: "range",
+      fromBytes: 2 ** 30,
+      toBytes: 5 * 2 ** 30,
+      errorKind: "permission-denied",
+      detail: "secret SQL in the message",
+    } as const;
+    const denied = note({ partitionFiltered: false, readsOwnTable: false, sizing: range });
+    expect(denied).toBe(
+      `${reads} A dry run of the MERGE needs write access to the table, which the check's account does not have, so this model's figure covers its query alone: each run reads between 1.00 GiB and 5.00 GiB (with the whole table).`,
     );
-    expect(note({ partitionFiltered: true, readsOwnTable: true })).toBe(
-      `- \`orders_merge\`: has a unique key, so each run is a MERGE that also reads the whole existing table. ${lowerBound} Its \`updatePartitionFilter\` does not limit that read, because the query also reads this table.`,
+    const failed = note({
+      partitionFiltered: false,
+      readsOwnTable: false,
+      sizing: { ...range, errorKind: "query-error" },
+    });
+    expect(failed).toContain(
+      "The dry run of the MERGE failed (BigQuery's message is in the job log)",
+    );
+    expect(failed).not.toContain("secret");
+  });
+
+  it("calls an insert-overwrite model's figure a lower bound", () => {
+    const { merge: _merge, ...plain } = merged;
+    const line = renderComment(
+      report({ estimates: [{ ...plain, insertOverwrite: true }], totalMonthlyDelta: 0.92 }),
+    )
+      .split("\n")
+      .find((l) => l.startsWith("- `orders_merge`:"));
+    expect(line).toBe(
+      "- `orders_merge`: replaces partitions (`INSERT_OVERWRITE`), so each run also runs a MERGE that reads part of the existing table. Those bytes are not included, so this model's figure is a lower bound.",
+    );
+  });
+
+  it("speaks of the base when this change drops the unique key", () => {
+    const line = renderComment(
+      report({
+        estimates: [
+          {
+            ...merged,
+            merge: {
+              partitionFiltered: false,
+              readsOwnTable: false,
+              sizing: query,
+              baseOnly: true,
+            },
+          },
+        ],
+        totalMonthlyDelta: 0.92,
+      }),
+    )
+      .split("\n")
+      .find((l) => l.startsWith("- `orders_merge`:"));
+    expect(line).toBe(
+      "- `orders_merge`: had a unique key before this change, so each run at base is a MERGE that also reads part or all of the existing table. Those bytes are not included, so the base figure is a lower bound. An `updatePartitionFilter` can limit that read.",
+    );
+  });
+
+  it("says the read of the existing table is not included when the table was not looked up", () => {
+    expect(note({ partitionFiltered: false, readsOwnTable: false, sizing: query })).toBe(
+      `${reads} ${lowerBound} An \`updatePartitionFilter\` can limit that read.`,
+    );
+    expect(note({ partitionFiltered: true, readsOwnTable: false, sizing: query })).toBe(
+      `${reads} ${lowerBound}`,
+    );
+    expect(note({ partitionFiltered: false, readsOwnTable: true, sizing: query })).toBe(
+      `${reads} ${lowerBound}`,
+    );
+    expect(note({ partitionFiltered: true, readsOwnTable: true, sizing: query })).toBe(
+      `${reads} ${lowerBound} Its \`updatePartitionFilter\` does not limit that read, because the query also reads this table.`,
     );
   });
 });

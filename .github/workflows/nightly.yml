@@ -80,7 +80,7 @@ jobs:
         run: npm install --prefix "$RUNNER_TEMP/cli2" @dataform/cli@2.9.0 # zizmor: ignore[adhoc-packages]
 
       - name: Compile and parse a dataform.json project
-        run: DATAFORM_V2_CLI="$RUNNER_TEMP/cli2/node_modules/.bin/dataform" node_modules/.bin/vitest run packages/dataform/test/compile.test.ts
+        run: DATAFORM_V2_CLI="$RUNNER_TEMP/cli2/node_modules/.bin/dataform" node_modules/.bin/vitest run packages/dataform/test/compile.test.ts packages/dataform/test/merge-template.test.ts
 
   live:
     name: Live run against BigQuery

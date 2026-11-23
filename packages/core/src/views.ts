@@ -94,7 +94,8 @@ export function withViewReaders(
   head: readonly Model[],
 ): ModelChange[] {
   const baseByTarget = new Map(base.map((m) => [m.target, m]));
-  const isView = (m: Model | undefined) => m?.type === "view";
+  // A JIT view has no SQL to inline: readers keep reading the view live in BigQuery.
+  const isView = (m: Model | undefined) => m?.type === "view" && m.jitCode === undefined;
 
   // Views whose definition differs between the sides, as each side defines them.
   const baseDefs = new Map<string, string>();

@@ -44,6 +44,21 @@ describe("diffModels and pre_operations", () => {
   });
 });
 
+describe("diffModels and just-in-time actions", () => {
+  it("treats a change to a JIT action's code as a modified model", () => {
+    const base = model({ name: "jit", query: "", jitCode: "async (c) => ({ query: 'a' })" });
+    const head = { ...base, jitCode: "async (c) => ({ query: 'b' })" };
+    expect(diffModels([base], [head]).map((c) => c.kind)).toEqual(["modified"]);
+    expect(diffModels([base], [{ ...base }])).toEqual([]);
+  });
+
+  it("treats a model switching to JIT compilation as modified", () => {
+    const base = model({ name: "t" });
+    const head = { ...base, query: "", jitCode: "async (c) => ({ query: 'a' })" };
+    expect(diffModels([base], [head]).map((c) => c.kind)).toEqual(["modified"]);
+  });
+});
+
 describe("diffModels with a config", () => {
   const config = { ...DEFAULT_CONFIG, runsPerDay: { hourly: 24 } };
   const daily = model({ name: "t", tags: ["daily"] });

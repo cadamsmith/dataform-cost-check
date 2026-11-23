@@ -73,6 +73,10 @@ export function partitionFilterCause(
   return table === undefined ? undefined : { kind: "partition-filter-removed", table };
 }
 
+/** Why a just-in-time action is not estimated. */
+export const JIT_REASON =
+  "Its SQL is generated when the workflow runs (just-in-time compilation), so a dry run cannot size it.";
+
 /** Why some model types are not estimated. See docs/design.md, "Hard cases". */
 const SKIP_REASONS: Partial<Record<Model["type"], string>> = {
   view: "Views cost nothing to create; the cost lands on whatever reads them.",
@@ -203,6 +207,21 @@ export async function estimateChange(
   const baseModel = change.kind === "modified" ? change.base : model;
   const involvesIncremental =
     base?.incrementalQuery !== undefined || head?.incrementalQuery !== undefined;
+
+  // A JIT action has no SQL until the workflow runs, so there is nothing to dry-run. Not
+  // tried, so a failure is never reported for it, and its rebuild counts as left out.
+  if (base?.jitCode !== undefined || head?.jitCode !== undefined) {
+    return {
+      status: "unestimable",
+      ...common,
+      ...((base?.type === "incremental" || head?.type === "incremental") && {
+        involvesIncremental: true,
+      }),
+      reason: JIT_REASON,
+      jit: true,
+    };
+  }
+
   /** One rebuild of both sides, priced each at its own price; undefined if either is unsized. */
   const rebuild = (baseBytes: number | undefined, headBytes: number | undefined) =>
     baseBytes === undefined || headBytes === undefined

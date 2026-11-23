@@ -284,3 +284,52 @@ describe("a pre_operations temp table (SQLX)", () => {
     expect(runner.calls).toEqual([]);
   });
 });
+
+/**
+ * Real `dataform compile --json` output (CLI and core 3.1.6) from a project with
+ * just-in-time actions: `.jitCode()` on a table, an incremental, a view and an operation in
+ * JavaScript, a `compilation_mode: "jit"` SQLX table, and one ordinary SQLX table. JIT
+ * actions carry `jitCode` and no `query` or `queries`.
+ */
+const jitProject: unknown = JSON.parse(
+  readFileSync(new URL("fixtures/jit-compile.json", import.meta.url), "utf8"),
+);
+
+describe("parseCompileOutput on just-in-time actions", () => {
+  it("keeps JIT actions as models with their code and no query, beside ordinary ones", () => {
+    const models = parseCompileOutput(jitProject);
+    expect(models.map((m) => [m.name, m.type, m.jitCode !== undefined]).sort()).toEqual([
+      ["orders", "table", false],
+      ["orders_jit", "table", true],
+      ["orders_jit_incremental", "incremental", true],
+      ["orders_jit_view", "view", true],
+      ["orders_sqlx_jit", "table", true],
+      ["refresh_jit", "operations", true],
+    ]);
+    const jit = models.find((m) => m.name === "orders_jit");
+    expect(jit?.query).toBe("");
+    expect(jit?.jitCode).toContain("jctx");
+    expect(models.find((m) => m.name === "orders")?.query).toContain("raw.orders");
+  });
+
+  it("reports a JIT table as not estimated, without a dry run", async () => {
+    const model = parseCompileOutput(jitProject).find((m) => m.name === "orders_sqlx_jit");
+    if (model === undefined) throw new Error("orders_sqlx_jit missing from the fixture");
+    const runner = new FakeDryRunner();
+    const estimate = await estimateChange(
+      { kind: "added", target: model.target, head: model },
+      runner,
+      DEFAULT_CONFIG,
+    );
+    expect(estimate).toMatchObject({ status: "unestimable", jit: true });
+    expect(runner.calls).toEqual([]);
+  });
+
+  it("still rejects an ordinary action with no query", () => {
+    const broken = structuredClone(jitProject) as { tables: Record<string, unknown>[] };
+    const orders = broken.tables.find((t) => (t.target as { name: string }).name === "orders");
+    if (orders === undefined) throw new Error("orders missing from the fixture");
+    delete orders.query;
+    expect(() => parseCompileOutput(broken)).toThrow("has no query");
+  });
+});

@@ -191,6 +191,13 @@ describe("dryRunFailure", () => {
     expect(dryRunFailure(report([temp, failed]))).toContain("1 tried");
   });
 
+  it("leaves JIT actions, which are never dry-run, out of the count", () => {
+    const { errorKind: _kind, detail: _detail, ...rest } = failed;
+    const jit = { ...rest, name: "jit", reason: "JIT", jit: true } as const;
+    expect(dryRunFailure(report([jit]))).toBeUndefined();
+    expect(dryRunFailure(report([jit, failed]))).toContain("1 tried");
+  });
+
   it("passes when nothing needed a dry run", () => {
     expect(dryRunFailure(report([]))).toBeUndefined();
     expect(dryRunFailure(report([skipped]))).toBeUndefined();

@@ -55,6 +55,14 @@ describe("withViewReaders", () => {
     expect(changes.some((c) => c.target === unrelated.target)).toBe(false);
   });
 
+  it("never inlines a JIT view, which has no SQL until run time", () => {
+    const jitView = (code: string): Model => ({ ...view(""), jitCode: code });
+    const base = [jitView("async (c) => ({ query: 'a' })"), reader];
+    const head = [jitView("async (c) => ({ query: 'b' })"), reader];
+    const changes = withViewReaders(diffModels(base, head), base, head);
+    expect(changes.map((c) => c.target)).toEqual([V]);
+  });
+
   it("follows unchanged views that read a changed view", () => {
     const outer = model({ name: "outer_v", type: "view", query: `SELECT * FROM \`${V}\`` });
     const top = model({ name: "top", query: `SELECT * FROM \`${outer.target}\`` });

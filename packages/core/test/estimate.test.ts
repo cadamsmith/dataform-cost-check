@@ -432,7 +432,30 @@ describe("unique-key incremental models", () => {
       ]),
       config,
     );
-    expect(e).toMatchObject({ status: "estimated", merge: { partitionFiltered: false } });
+    expect(e).toMatchObject({
+      status: "estimated",
+      merge: { partitionFiltered: false, readsOwnTable: false },
+    });
+  });
+
+  it("notes when the incremental query reads the model's own table", async () => {
+    const m = model({
+      name: "m",
+      type: "incremental",
+      query: "q",
+      merge: { partitionFiltered: true },
+    });
+    const iq = `SELECT * FROM src WHERE d > (SELECT MAX(d) FROM \`${m.target}\`)`;
+    const withSelf = { ...m, incrementalQuery: iq };
+    const e = await estimateChange(
+      { kind: "modified", target: m.target, base: withSelf, head: withSelf },
+      new FakeDryRunner([
+        [iq, { bytes: 1 }],
+        ["q", { bytes: 2 }],
+      ]),
+      config,
+    );
+    expect(e).toMatchObject({ merge: { partitionFiltered: true, readsOwnTable: true } });
   });
 });
 

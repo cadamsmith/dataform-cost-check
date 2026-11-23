@@ -46253,9 +46253,7 @@ function notesFor(e2) {
       `- \`${e2.name}\`: its own SQL is unchanged, but it reads ${e2.viaViews.map((v) => `\`${v}\``).join(", ")}, which this pull request changes. Estimated with the new view definition.`
     ],
     ...e2.likelyCause === void 0 ? [] : [`- \`${e2.name}\`: likely cause: ${causeText(e2.likelyCause)}.`],
-    ...e2.merge === void 0 ? [] : [
-      e2.merge.partitionFiltered ? `- \`${e2.name}\`: has a unique key, so each run is a MERGE that also reads the table's partitions matching its update filter. Those bytes are not included, so this model's figure is a lower bound.` : `- \`${e2.name}\`: has a unique key, so each run is a MERGE that also reads the whole existing table. Those bytes are not included, so this model's figure is a lower bound. An \`updatePartitionFilter\` limits that read.`
-    ],
+    ...e2.merge === void 0 ? [] : [mergeNote(e2.name, e2.merge)],
     ...e2.fullRefreshBytes === void 0 ? [] : [
       `- \`${e2.name}\`: incremental, estimated from its incremental query. A full refresh would scan up to ${formatBytes(e2.fullRefreshBytes)}, not included in the monthly estimate.`
     ]
@@ -46336,6 +46334,15 @@ function formatUsd(amount, { signed = false } = {}) {
   const body = abs.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const sign = amount < 0 ? "-" : signed && amount > 0 ? "+" : "";
   return `${sign}$${body}`;
+}
+function mergeNote(name, merge) {
+  const start = `- \`${name}\`: has a unique key, so each run is a MERGE that also reads`;
+  const end = "Those bytes are not included, so this model's figure is a lower bound.";
+  if (merge.readsOwnTable) {
+    const filter = merge.partitionFiltered ? " Its `updatePartitionFilter` does not limit that read, because the query also reads this table." : "";
+    return `${start} the whole existing table. ${end}${filter}`;
+  }
+  return merge.partitionFiltered ? `${start} the table's partitions matching its update filter. ${end}` : `${start} the whole existing table. ${end} An \`updatePartitionFilter\` limits that read.`;
 }
 
 // ../core/src/estimate.ts
@@ -46525,7 +46532,12 @@ async function estimateChange(change, runner, config, newTargets = /* @__PURE__ 
     pricePerTib,
     monthlyDelta: monthlyCost(headResult.bytes, pricePerTib, runsPerDay) - monthlyCost(baseResult.bytes, basePricePerTib, baseRunsPerDay),
     ...likelyCause !== void 0 && { likelyCause },
-    ...head?.merge !== void 0 && { merge: head.merge },
+    ...head?.merge !== void 0 && {
+      merge: {
+        ...head.merge,
+        readsOwnTable: steadyStateSql(head).includes(`\`${change.target}\``)
+      }
+    },
     ...change.kind === "modified" && change.viaViews !== void 0 && { viaViews: change.viaViews },
     ...fullRefreshResult !== void 0 && "bytes" in fullRefreshResult && { fullRefreshBytes: fullRefreshResult.bytes },
     ...fullRefresh !== void 0 && { fullRefresh },

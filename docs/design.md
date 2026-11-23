@@ -121,6 +121,15 @@ reports "not estimated" with a reason.
   (43,068,800 against 36,313,200), and a non-partition filter on the target did not reduce
   it. The comment notes these models and calls their figure a lower bound; with
   `updatePartitionFilter` the note says the read is limited to matching partitions.
+  Checked against real Dataform runs 2026-11-23 (696 MB partitioned source): a full refresh
+  and an append incremental processed exactly their dry-run bytes (833,879,814); the MERGE
+  processed 1,445,892,829, the SELECT plus the whole target. When the incremental query reads
+  the model's own table (the usual `MAX(...)` from `self()` filter), `updatePartitionFilter`
+  did not reduce that, in the billed run or in dry runs of several filter forms; with a
+  literal source filter it did (1.33 GB to 0.78 GB). So when the query quotes its own target
+  (`Estimate.merge.readsOwnTable`), the note says the whole table is read and that the
+  update filter does not limit it. A dry run of the MERGE statement itself matched the
+  billed bytes; sizing it that way is a possible follow-up.
 - **Pre-operations.** Incremental models often `DECLARE` a checkpoint in
   `pre_operations` and filter on it. A dry run of the query alone fails on the unknown
   name, and a dry run of pre-operations plus query counted 0 bytes for the filtered

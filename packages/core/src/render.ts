@@ -237,13 +237,7 @@ function notesFor(e: Estimated): string[] {
     ...(e.likelyCause === undefined
       ? []
       : [`- \`${e.name}\`: likely cause: ${causeText(e.likelyCause)}.`]),
-    ...(e.merge === undefined
-      ? []
-      : [
-          e.merge.partitionFiltered
-            ? `- \`${e.name}\`: has a unique key, so each run is a MERGE that also reads the table's partitions matching its update filter. Those bytes are not included, so this model's figure is a lower bound.`
-            : `- \`${e.name}\`: has a unique key, so each run is a MERGE that also reads the whole existing table. Those bytes are not included, so this model's figure is a lower bound. An \`updatePartitionFilter\` limits that read.`,
-        ]),
+    ...(e.merge === undefined ? [] : [mergeNote(e.name, e.merge)]),
     ...(e.fullRefreshBytes === undefined
       ? []
       : [
@@ -359,4 +353,24 @@ export function formatUsd(amount: number, { signed = false }: { signed?: boolean
   const body = abs.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const sign = amount < 0 ? "-" : signed && amount > 0 ? "+" : "";
   return `${sign}$${body}`;
+}
+
+/** The MERGE's read of the existing table, which the dry run of the SELECT leaves out. */
+function mergeNote(
+  name: string,
+  merge: { readonly partitionFiltered: boolean; readonly readsOwnTable: boolean },
+): string {
+  const start = `- \`${name}\`: has a unique key, so each run is a MERGE that also reads`;
+  const end = "Those bytes are not included, so this model's figure is a lower bound.";
+  if (merge.readsOwnTable) {
+    // Measured 2026-11-23: with the query reading the table, BigQuery read all of it,
+    // whatever the update filter.
+    const filter = merge.partitionFiltered
+      ? " Its `updatePartitionFilter` does not limit that read, because the query also reads this table."
+      : "";
+    return `${start} the whole existing table. ${end}${filter}`;
+  }
+  return merge.partitionFiltered
+    ? `${start} the table's partitions matching its update filter. ${end}`
+    : `${start} the whole existing table. ${end} An \`updatePartitionFilter\` limits that read.`;
 }

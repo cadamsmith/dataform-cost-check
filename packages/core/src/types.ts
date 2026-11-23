@@ -140,9 +140,12 @@ export type Estimate =
       readonly viaViews?: readonly string[];
       /**
        * Incremental models with a `uniqueKey`: the run is a MERGE that also reads the
-       * existing table, which the dry run of the SELECT does not count.
+       * existing table, which the dry run of the SELECT does not count. `readsOwnTable` is
+       * true when the incremental query reads the model's own table (say a `MAX(...)` from
+       * `self()`): BigQuery then reads the whole table, and `updatePartitionFilter` does not
+       * limit it (measured 2026-11-23).
        */
-      readonly merge?: { readonly partitionFiltered: boolean };
+      readonly merge?: { readonly partitionFiltered: boolean; readonly readsOwnTable: boolean };
     }
   | {
       /** Deliberately not estimated, e.g. views or custom operations. */

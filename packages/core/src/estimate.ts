@@ -332,7 +332,12 @@ export async function estimateChange(
       monthlyCost(headResult.bytes, pricePerTib, runsPerDay) -
       monthlyCost(baseResult.bytes, basePricePerTib, baseRunsPerDay),
     ...(likelyCause !== undefined && { likelyCause }),
-    ...(head?.merge !== undefined && { merge: head.merge }),
+    ...(head?.merge !== undefined && {
+      merge: {
+        ...head.merge,
+        readsOwnTable: steadyStateSql(head).includes(`\`${change.target}\``),
+      },
+    }),
     ...(change.kind === "modified" &&
       change.viaViews !== undefined && { viaViews: change.viaViews }),
     ...(fullRefreshResult !== undefined &&

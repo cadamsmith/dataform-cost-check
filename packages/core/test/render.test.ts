@@ -307,20 +307,33 @@ describe("refresh history", () => {
 });
 
 describe("unique-key incremental models", () => {
+  const merged: Estimate = {
+    ...customers,
+    name: "orders_merge",
+    merge: { partitionFiltered: false, readsOwnTable: false },
+  };
+  const note = (merge: { partitionFiltered: boolean; readsOwnTable: boolean }) =>
+    renderComment(report({ estimates: [{ ...merged, merge }], totalMonthlyDelta: 0.92 }))
+      .split("\n")
+      .find((line) => line.startsWith("- `orders_merge`: has a unique key"));
+  const lowerBound = "Those bytes are not included, so this model's figure is a lower bound.";
+
   it("says the MERGE's read of the existing table is not included", () => {
-    const merged: Estimate = {
-      ...customers,
-      name: "orders_merge",
-      merge: { partitionFiltered: false },
-    };
-    const body = renderComment(report({ estimates: [merged], totalMonthlyDelta: 0.92 }));
-    expect(body).toContain(
-      "- `orders_merge`: has a unique key, so each run is a MERGE that also reads the whole existing table. Those bytes are not included, so this model's figure is a lower bound.",
+    expect(note({ partitionFiltered: false, readsOwnTable: false })).toBe(
+      `- \`orders_merge\`: has a unique key, so each run is a MERGE that also reads the whole existing table. ${lowerBound} An \`updatePartitionFilter\` limits that read.`,
     );
-    const filtered = renderComment(
-      report({ estimates: [{ ...merged, merge: { partitionFiltered: true } }] }),
+    expect(note({ partitionFiltered: true, readsOwnTable: false })).toBe(
+      `- \`orders_merge\`: has a unique key, so each run is a MERGE that also reads the table's partitions matching its update filter. ${lowerBound}`,
     );
-    expect(filtered).toContain("partitions matching its update filter");
+  });
+
+  it("says the whole table is read when the query reads its own table", () => {
+    expect(note({ partitionFiltered: false, readsOwnTable: true })).toBe(
+      `- \`orders_merge\`: has a unique key, so each run is a MERGE that also reads the whole existing table. ${lowerBound}`,
+    );
+    expect(note({ partitionFiltered: true, readsOwnTable: true })).toBe(
+      `- \`orders_merge\`: has a unique key, so each run is a MERGE that also reads the whole existing table. ${lowerBound} Its \`updatePartitionFilter\` does not limit that read, because the query also reads this table.`,
+    );
   });
 });
 

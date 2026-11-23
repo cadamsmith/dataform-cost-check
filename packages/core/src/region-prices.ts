@@ -3,7 +3,8 @@
  * free first TiB each month. From the Cloud Billing Catalog API (BigQuery, service
  * 24E6-581D-38E5, SKUs "Analysis" and "Analysis (<location>)"), retrieved 2026-11-20.
  * Keys are matched without regard to case. `US` and `EU` are the multi-regions.
- * Refresh: GET https://cloudbilling.googleapis.com/v1/services/24E6-581D-38E5/skus
+ * Refresh: GET https://cloudbilling.googleapis.com/v1/services/24E6-581D-38E5/skus. The nightly
+ * run checks this table against it (`scripts/price-drift.mjs`) and fails on any drift.
  */
 export const ON_DEMAND_PRICE_PER_TIB: Readonly<Record<string, number>> = {
   EU: 6.25,

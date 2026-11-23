@@ -1,7 +1,7 @@
 name: Nightly
 
 # Catches drift we do not control: new Dataform CLI releases (whose output the adapter
-# parses) and BigQuery's live API. Dry runs are free.
+# parses), BigQuery's live API, and Google's on-demand list prices. Dry runs are free.
 on:
   schedule:
     - cron: "23 4 * * *"
@@ -129,9 +129,41 @@ jobs:
           grep -q 'likely cause: a filter on the partitioned table' "$RUNNER_TEMP/out.txt"
           grep -q 'Check exit code: 1' "$RUNNER_TEMP/out.txt"
 
+  price-drift:
+    name: Built-in prices match Google's catalog
+    # Compares ON_DEMAND_PRICE_PER_TIB with the Cloud Billing Catalog API (free, public
+    # data, no role needed) and fails on any change, so the report job opens an issue.
+    # Fixing it stays a manual edit. Same keyless sign-in as the live run.
+    if: ${{ vars.GCP_WIF_PROVIDER != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - id: auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          token_format: access_token
+
+      - name: Compare prices
+        env:
+          ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: node scripts/price-drift.mjs
+
   report:
     name: Open an issue when the nightly fails
-    needs: [cli-canary, cli-v2, live]
+    needs: [cli-canary, cli-v2, live, price-drift]
     if: ${{ failure() && github.event_name == 'schedule' }}
     runs-on: ubuntu-latest
     permissions:
@@ -145,5 +177,5 @@ jobs:
           if [ -n "$existing" ]; then
             gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "Failed again: $RUN_URL"
           else
-            gh issue create --repo "$GITHUB_REPOSITORY" --label nightly --title "Nightly run failed" --body "The nightly CLI canary or live run failed: $RUN_URL"
+            gh issue create --repo "$GITHUB_REPOSITORY" --label nightly --title "Nightly run failed" --body "The nightly CLI canary, live run or price-drift check failed: $RUN_URL"
           fi

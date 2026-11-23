@@ -9,7 +9,8 @@ import { mergeSql } from "@dataform-cost-check/core";
  * Drift guard for `core.mergeSql`, our copy of the MERGE Dataform runs for unique-key
  * incrementals. It takes Dataform's own BigQuery `mergeInto` out of an installed bundle,
  * runs it, and checks our statement is identical. The nightly canary runs it against the
- * oldest and the newest 3.x CLI, and CI against 3.1.6 and core 2.9.0. 3.1.x must match
+ * oldest and the newest 3.x CLI, CI against 3.1.6, and the nightly 2.x job against core
+ * 2.9.0. 3.1.x must match
  * exactly; older versions only up to alias names and whitespace (see `mergeSql`).
  */
 

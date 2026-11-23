@@ -238,6 +238,11 @@ function notesFor(e: Estimated): string[] {
       ? []
       : [`- \`${e.name}\`: likely cause: ${causeText(e.likelyCause)}.`]),
     ...(e.merge === undefined ? [] : [mergeNote(e.name, e.merge)]),
+    ...(e.insertOverwrite === true
+      ? [
+          `- \`${e.name}\`: replaces partitions (\`INSERT_OVERWRITE\`), so each run also runs a MERGE that reads part of the existing table. Those bytes are not included, so this model's figure is a lower bound.`,
+        ]
+      : []),
     ...(e.fullRefreshBytes === undefined
       ? []
       : [

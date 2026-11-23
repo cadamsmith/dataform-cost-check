@@ -46305,6 +46305,9 @@ function notesFor(e2) {
     ],
     ...e2.likelyCause === void 0 ? [] : [`- \`${e2.name}\`: likely cause: ${causeText(e2.likelyCause)}.`],
     ...e2.merge === void 0 ? [] : [mergeNote(e2.name, e2.merge)],
+    ...e2.insertOverwrite === true ? [
+      `- \`${e2.name}\`: replaces partitions (\`INSERT_OVERWRITE\`), so each run also runs a MERGE that reads part of the existing table. Those bytes are not included, so this model's figure is a lower bound.`
+    ] : [],
     ...e2.fullRefreshBytes === void 0 ? [] : [
       `- \`${e2.name}\`: incremental, estimated from its incremental query. A full refresh would scan up to ${formatBytes(e2.fullRefreshBytes)}, not included in the monthly estimate.`
     ]
@@ -46608,6 +46611,7 @@ async function estimateChange(change, runner, config, newTargets = /* @__PURE__ 
         ...mergeModel !== shown && { baseOnly: true }
       }
     },
+    ...shown?.insertOverwrite === true && { insertOverwrite: true },
     ...change.kind === "modified" && change.viaViews !== void 0 && { viaViews: change.viaViews },
     ...fullRefreshResult !== void 0 && "bytes" in fullRefreshResult && { fullRefreshBytes: fullRefreshResult.bytes },
     ...fullRefresh !== void 0 && { fullRefresh },
@@ -46855,6 +46859,7 @@ function toModel(action, type, location, query) {
     ...action.preOps !== void 0 && action.preOps.length > 0 && { preOps: action.preOps },
     ...action.incrementalPreOps !== void 0 && action.incrementalPreOps.length > 0 && { incrementalPreOps: action.incrementalPreOps },
     tags: action.tags ?? [],
+    ...type === "incremental" && action.incrementalStrategy === "INSERT_OVERWRITE" && { insertOverwrite: true },
     ...type === "incremental" && (action.uniqueKey?.length ?? 0) > 0 && action.incrementalStrategy !== "INSERT_OVERWRITE" && {
       merge: {
         uniqueKey: action.uniqueKey ?? [],

@@ -33,6 +33,12 @@ export interface Model {
     /** Extra conditions on the target (`bigquery.incrementalPredicates`, Dataform 3.1+). */
     readonly incrementalPredicates?: readonly string[];
   };
+  /**
+   * Incremental models with `incrementalStrategy: INSERT_OVERWRITE` (Dataform 3.1+): each
+   * run stages the query's rows, then replaces the matching partitions of the existing
+   * table with a MERGE, which also reads that table. Not sized beyond the query.
+   */
+  readonly insertOverwrite?: boolean;
   readonly tags: readonly string[];
   /**
    * BigQuery location the query runs in, e.g. `US` or `europe-west2`. Absent when the
@@ -178,6 +184,8 @@ export type Estimate =
       readonly involvesIncremental?: boolean;
       /** The changed views this model reads, when that is the only reason it is listed. */
       readonly viaViews?: readonly string[];
+      /** Head (base, if removed) replaces partitions (`Model.insertOverwrite`): a lower bound. */
+      readonly insertOverwrite?: boolean;
       /**
        * Incremental models with a `uniqueKey`: the run is a MERGE that also reads the
        * existing table. `sizing` says whether that read is counted. `readsOwnTable` is

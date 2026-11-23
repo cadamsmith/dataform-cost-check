@@ -351,6 +351,18 @@ describe("unique-key incremental models", () => {
     expect(failed).not.toContain("secret");
   });
 
+  it("calls an insert-overwrite model's figure a lower bound", () => {
+    const { merge: _merge, ...plain } = merged;
+    const line = renderComment(
+      report({ estimates: [{ ...plain, insertOverwrite: true }], totalMonthlyDelta: 0.92 }),
+    )
+      .split("\n")
+      .find((l) => l.startsWith("- `orders_merge`:"));
+    expect(line).toBe(
+      "- `orders_merge`: replaces partitions (`INSERT_OVERWRITE`), so each run also runs a MERGE that reads part of the existing table. Those bytes are not included, so this model's figure is a lower bound.",
+    );
+  });
+
   it("speaks of the base when this change drops the unique key", () => {
     const line = renderComment(
       report({

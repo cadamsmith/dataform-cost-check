@@ -359,6 +359,7 @@ export async function estimateChange(
           ...(mergeModel !== shown && { baseOnly: true }),
         },
       }),
+    ...(shown?.insertOverwrite === true && { insertOverwrite: true }),
     ...(change.kind === "modified" &&
       change.viaViews !== undefined && { viaViews: change.viaViews }),
     ...(fullRefreshResult !== undefined &&

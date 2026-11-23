@@ -239,6 +239,8 @@ describe("parseCompileOutput on incremental models with a unique key", () => {
       t.incrementalStrategy = "INSERT_OVERWRITE";
     });
     expect(inc(overwrite)?.merge).toBeUndefined();
+    expect(inc(overwrite)?.insertOverwrite).toBe(true);
+    expect(inc(withKey())?.insertOverwrite).toBeUndefined();
     const noKey = sampleWith((o) => {
       for (const t of o.tables as Record<string, unknown>[]) delete t.uniqueKey;
     });

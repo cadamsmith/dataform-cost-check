@@ -233,6 +233,8 @@ function toModel(
       action.incrementalPreOps.length > 0 && { incrementalPreOps: action.incrementalPreOps }),
     tags: action.tags ?? [],
     ...(type === "incremental" &&
+      action.incrementalStrategy === "INSERT_OVERWRITE" && { insertOverwrite: true }),
+    ...(type === "incremental" &&
       (action.uniqueKey?.length ?? 0) > 0 &&
       action.incrementalStrategy !== "INSERT_OVERWRITE" && {
         merge: {

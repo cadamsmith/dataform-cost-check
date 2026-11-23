@@ -136,11 +136,12 @@ reports "not estimated" with a reason.
   (`T`/`S` for `DATAFORM_DEST`/`DATAFORM_SOURCE`) and whitespace, which do not change the
   bytes (both forms dry-ran to 258,085,598 on the sandbox's `terms_daily`). A test runs
   Dataform's own `mergeInto` out of the installed bundle and compares: exactly for 3.1.x,
-  up to aliases and whitespace for older versions. It runs in CI and in the nightly CLI
-  canary, so drift fails a build (it caught the 3.1.x change). Models with
+  up to aliases and whitespace for older versions. It runs in CI (CLI 3.1.6) and nightly (the
+  oldest and newest 3.x CLI, and core 2.9.0), so drift fails a build (it caught the 3.1.x
+  change). Models with
   `incrementalStrategy: INSERT_OVERWRITE` (3.1+) run a different script, a staging table
-  and a partition-replacing MERGE, so they get no MERGE sizing and no MERGE note; sizing
-  them is not done yet. `DryRunner.table` reads the target's columns and logical size with
+  and a partition-replacing MERGE, so they get no MERGE sizing. They get their own note
+  instead: the figure is the query alone, a lower bound (`Estimate.insertOverwrite`). `DryRunner.table` reads the target's columns and logical size with
   a free `tables.get` (Data Viewer covers it). Three outcomes (`Estimate.merge.sizing`):
   - `merge`: the MERGE dry run succeeded on every side that has a key. Its bytes replace
     the query's, so the figure and the monthly change are exact.

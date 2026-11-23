@@ -544,6 +544,26 @@ describe("unique-key incremental models", () => {
     });
   });
 
+  it("flags an insert-overwrite incremental as a lower bound", async () => {
+    const m = model({
+      name: "m",
+      type: "incremental",
+      query: "q",
+      incrementalQuery: "iq",
+      insertOverwrite: true,
+    });
+    const e = await estimateChange(
+      { kind: "added", target: m.target, head: m },
+      new FakeDryRunner([
+        ["iq", { bytes: 1 }],
+        ["q", { bytes: 2 }],
+      ]),
+      config,
+    );
+    expect(e).toMatchObject({ status: "estimated", headBytes: 1, insertOverwrite: true });
+    expect(e).not.toHaveProperty("merge");
+  });
+
   it("sizes the base MERGE when the pull request drops the unique key", async () => {
     const base = merging("iq");
     const head = model({ name: "m", type: "incremental", query: "q", incrementalQuery: "iq" });

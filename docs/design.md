@@ -170,6 +170,27 @@ reports "not estimated" with a reason.
   pre-operations create (`CREATE TEMP TABLE scope AS ...`, `core.preOpsTempTableIn`): it
   exists only inside Dataform's script, so the query alone fails on the unknown name.
   Pre-operations are part of the diff, so changing them alone counts as a change.
+  **Script dry runs and temp tables (#119), measured 2026-11-23** on a 749 MB source
+  partitioned by date, through real Dataform runs (CLI 3.1.6). A script dry run counts
+  statements only up to the first `CREATE TEMP TABLE`: that statement and everything after it
+  count 0, even a select that does not read the temp table. A temp table created with a
+  column list instead of `AS SELECT` also gave 0 for a query that reads it. A select placed before it is counted in full. So
+  a dry run of pre-operations plus query undercounts these models:
+  - A table whose pre-operations create a temp table: the script dry run gave 0 bytes. The
+    real run processed 196,929,431, which was 29,875,365 for the temp table plus 167,054,066
+    for the query.
+  - The same with a `DECLARE`d checkpoint: 0 for the full refresh, which processed
+    1,067,347,121. The incremental script dry run gave 91,022,400, exactly a dry run of the
+    `DECLARE`'s `MAX()` over the target alone. Two days of rows were then deleted from the
+    target, and the real incremental run processed 241,456,014: the `DECLARE` (76,991,040,
+    over the smaller target), the temp table (63,734,112) and the `INSERT` (100,730,862).
+
+  The temp-table and query statements of the real runs matched, to the byte, dry runs of
+  each alone: the temp table's select with the checkpoint as a literal, and the query with
+  the temp table inlined as a subquery (or, for the table, with the join to it removed). The read of the temp table itself added nothing. That
+  held where the temp table read the same table and partitions as the query; other shapes
+  were not tried, and the estimate does not rewrite SQL. These models stay not estimated.
+
 - **Just-in-time actions.** Dataform 3 can build an action's SQL when the workflow runs
   (`.jitCode()` in JavaScript, or `compilation_mode: "jit"` in SQLX). `dataform compile --json`
   then carries the code (`jitCode`) and no `query` or `queries`. Checked 2026-11-23: with CLI

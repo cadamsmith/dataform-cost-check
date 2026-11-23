@@ -119,8 +119,7 @@ reports "not estimated" with a reason.
   existing table, which also reads that table; the dry run covers only the SELECT. Measured
   2026-11-20: the MERGE dry run counted the SELECT's bytes plus the whole 6.76 MB target
   (43,068,800 against 36,313,200), and a non-partition filter on the target did not reduce
-  it. The comment notes these models and calls their figure a lower bound; with
-  `updatePartitionFilter` the note says the read is limited to matching partitions.
+  it.
   Checked against real Dataform runs 2026-11-23 (696 MB partitioned source): a full refresh
   and an append incremental processed exactly their dry-run bytes (833,879,814); the MERGE
   processed 1,445,892,829, the SELECT plus the whole target. When the incremental query reads
@@ -129,7 +128,31 @@ reports "not estimated" with a reason.
   literal source filter it did (1.33 GB to 0.78 GB). So when the query quotes its own target
   (`Estimate.merge.readsOwnTable`), the note says the whole table is read and that the
   update filter does not limit it. A dry run of the MERGE statement itself matched the
-  billed bytes; sizing it that way is a possible follow-up.
+  billed bytes.
+  **Sizing the MERGE (#114), 2026-11-23.** `dataform compile --json` has no MERGE, because
+  Dataform takes the column list from the existing table at run time. `core.mergeSql`
+  copies Dataform's BigQuery `mergeInto` character for character (identical in core 2.9.0
+  and CLI 3.0.61 and 3.1.6). A test runs Dataform's own `mergeInto` out of the installed
+  bundle and compares, in CI and in the nightly CLI canary, so drift fails a build.
+  `DryRunner.table` reads the target's columns and logical size with a free `tables.get`
+  (Data Viewer covers it). Three outcomes (`Estimate.merge.sizing`):
+  - `merge`: the MERGE dry run succeeded on every side that has a key. Its bytes replace
+    the query's, so the figure and the monthly change are exact.
+  - `range`: the MERGE dry run failed. BigQuery requires `bigquery.tables.updateData` on the
+    target even for a dry run (checked with the sandbox's read-only account: denied). The
+    figure stays the query alone, and the note gives the range up to the query plus the
+    whole table. BigQuery's message goes to the job log. No read-only query reproduces the
+    MERGE's figure: on a 2.4 GB date-partitioned copy of Google Trends, a source filtered
+    to one date made the MERGE read only that date's partition of the target (153 MB, twice
+    the 77 MB query), where the query plus a scan of the target, with or without the update
+    filter, gave 2.52 GB or 400 MB. With a source reading `MAX()` from the target, the MERGE
+    read 4.90 GB; the query plus the filtered target gave 3.07 GB, too low. The query plus
+    the whole target was at or above the MERGE in every case tried, so it is the top of the
+    range. The README says not to grant write access just for this.
+  - `query`: the table could not be looked up (it does not exist yet, or no access). As
+    before: the figure is the query alone, a lower bound. The note now says the MERGE reads
+    "part or all of the existing table": the measurement above showed it can read one
+    partition, so "the whole table" was not always true.
 - **Pre-operations.** Incremental models often `DECLARE` a checkpoint in
   `pre_operations` and filter on it. A dry run of the query alone fails on the unknown
   name, and a dry run of pre-operations plus query counted 0 bytes for the filtered

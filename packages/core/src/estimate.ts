@@ -7,6 +7,7 @@ import {
   runsPerDayFor,
 } from "./pricing.ts";
 import { ON_DEMAND_PRICES_AS_OF } from "./region-prices.ts";
+import { mergeSql } from "./merge.ts";
 import { formatBytes } from "./render.ts";
 import type {
   Config,
@@ -15,6 +16,7 @@ import type {
   DryRunner,
   Estimate,
   LikelyCause,
+  MergeSizing,
   Model,
   ModelChange,
   Report,
@@ -308,6 +310,22 @@ export async function estimateChange(
     return { ...common, ...dryRunFailed("head", headResult) };
   }
 
+  // A unique-key incremental runs as a MERGE, which also reads the existing table.
+  const merged = await sizeMerges(
+    change.target,
+    base,
+    head,
+    baseResult.bytes,
+    headResult.bytes,
+    runner,
+  );
+  const baseBytes = merged?.baseBytes ?? baseResult.bytes;
+  const headBytes = merged?.headBytes ?? headResult.bytes;
+  // The note follows head, or base when head has no key (removed, or the key was dropped).
+  const shown = change.kind === "removed" ? base : head;
+  const mergeModel =
+    shown?.merge !== undefined ? shown : base?.merge !== undefined ? base : undefined;
+
   // Each side at its own frequency and price: a new tag or location changes the spend
   // even when the bytes do not.
   const runsPerDay = runsPerDayFor(model, config);
@@ -323,27 +341,87 @@ export async function estimateChange(
     status: "estimated",
     ...common,
     ...(model.location !== undefined && { location: model.location }),
-    baseBytes: baseResult.bytes,
-    headBytes: headResult.bytes,
+    baseBytes,
+    headBytes,
     runsPerDay,
     ...(baseRunsPerDay !== runsPerDay && { baseRunsPerDay }),
     pricePerTib,
     monthlyDelta:
-      monthlyCost(headResult.bytes, pricePerTib, runsPerDay) -
-      monthlyCost(baseResult.bytes, basePricePerTib, baseRunsPerDay),
+      monthlyCost(headBytes, pricePerTib, runsPerDay) -
+      monthlyCost(baseBytes, basePricePerTib, baseRunsPerDay),
     ...(likelyCause !== undefined && { likelyCause }),
-    ...(head?.merge !== undefined && {
-      merge: {
-        ...head.merge,
-        readsOwnTable: steadyStateSql(head).includes(`\`${change.target}\``),
-      },
-    }),
+    ...(mergeModel?.merge !== undefined &&
+      merged !== undefined && {
+        merge: {
+          partitionFiltered: mergeModel.merge.updatePartitionFilter !== undefined,
+          readsOwnTable: steadyStateSql(mergeModel).includes(`\`${change.target}\``),
+          sizing: merged.sizing,
+          ...(mergeModel !== shown && { baseOnly: true }),
+        },
+      }),
     ...(change.kind === "modified" &&
       change.viaViews !== undefined && { viaViews: change.viaViews }),
     ...(fullRefreshResult !== undefined &&
       "bytes" in fullRefreshResult && { fullRefreshBytes: fullRefreshResult.bytes }),
     ...(fullRefresh !== undefined && { fullRefresh }),
     ...(involvesIncremental && { involvesIncremental }),
+  };
+}
+
+/**
+ * Size the MERGE of each side that has a unique key (docs/design.md, "Unique-key
+ * incremental models"). Undefined when neither side does. A dry run of the MERGE itself is
+ * exact, but BigQuery requires write access to the table even for a dry run (measured
+ * 2026-11-23), and no read-only query reproduces its figure, because BigQuery prunes the
+ * table's partitions through the join. So when that dry run fails, each side keeps its
+ * query's bytes and the sizing gives the range up to the query plus the whole table. A
+ * failed lookup of the table (say it does not exist yet) also keeps the query's bytes.
+ */
+async function sizeMerges(
+  target: string,
+  base: Model | undefined,
+  head: Model | undefined,
+  baseBytes: number,
+  headBytes: number,
+  runner: DryRunner,
+): Promise<{ baseBytes: number; headBytes: number; sizing: MergeSizing } | undefined> {
+  if (base?.merge === undefined && head?.merge === undefined) return undefined;
+  const table = runner.table === undefined ? undefined : await runner.table(target);
+  if (table === undefined) return { baseBytes, headBytes, sizing: { by: "query" } };
+
+  const mergeRun = (side: Model | undefined) =>
+    side?.merge === undefined
+      ? undefined
+      : runner.estimate(
+          mergeSql(
+            target,
+            table.columns,
+            steadyStateSql(side),
+            side.merge.uniqueKey,
+            side.merge.updatePartitionFilter,
+          ),
+          side.location,
+        );
+  const [baseRun, headRun] = await Promise.all([mergeRun(base), mergeRun(head)]);
+  const failed = [headRun, baseRun].find((r): r is DryRunError => r !== undefined && "error" in r);
+  if (failed !== undefined) {
+    const fromBytes = head?.merge !== undefined ? headBytes : baseBytes;
+    return {
+      baseBytes,
+      headBytes,
+      sizing: {
+        by: "range",
+        fromBytes,
+        toBytes: fromBytes + table.bytes,
+        errorKind: failed.errorKind,
+        detail: failed.error,
+      },
+    };
+  }
+  return {
+    baseBytes: baseRun !== undefined && "bytes" in baseRun ? baseRun.bytes : baseBytes,
+    headBytes: headRun !== undefined && "bytes" in headRun ? headRun.bytes : headBytes,
+    sizing: { by: "merge" },
   };
 }
 

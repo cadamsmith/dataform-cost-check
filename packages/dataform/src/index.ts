@@ -229,7 +229,12 @@ function toModel(
     tags: action.tags ?? [],
     ...(type === "incremental" &&
       (action.uniqueKey?.length ?? 0) > 0 && {
-        merge: { partitionFiltered: Boolean(action.bigquery?.updatePartitionFilter) },
+        merge: {
+          uniqueKey: action.uniqueKey ?? [],
+          ...(action.bigquery?.updatePartitionFilter && {
+            updatePartitionFilter: action.bigquery.updatePartitionFilter,
+          }),
+        },
       }),
     ...(location !== undefined && { location }),
   };

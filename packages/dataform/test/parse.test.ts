@@ -219,11 +219,12 @@ describe("parseCompileOutput on incremental models with a unique key", () => {
       if (bigquery !== undefined) t.bigquery = bigquery;
     });
 
-  it("marks the model as a MERGE, and whether an update filter limits it", () => {
+  it("marks the model as a MERGE, with its key and update filter", () => {
     const inc = (out: unknown) => parseCompileOutput(out).find((m) => m.type === "incremental");
-    expect(inc(withKey())?.merge).toEqual({ partitionFiltered: false });
+    expect(inc(withKey())?.merge).toEqual({ uniqueKey: ["order_id"] });
     expect(inc(withKey({ updatePartitionFilter: "day > '2026-01-01'" }))?.merge).toEqual({
-      partitionFiltered: true,
+      uniqueKey: ["order_id"],
+      updatePartitionFilter: "day > '2026-01-01'",
     });
     const noKey = sampleWith((o) => {
       for (const t of o.tables as Record<string, unknown>[]) delete t.uniqueKey;

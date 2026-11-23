@@ -122,7 +122,11 @@ export function partitionFilterFailure(report: Report): string | undefined {
  * only. They can quote the query, so they never go into the comment or the job summary.
  */
 export function failureDetails(report: Report): string[] {
-  return report.estimates.flatMap((e) =>
-    e.status === "unestimable" && e.detail !== undefined ? [`${e.name}: ${e.detail}`] : [],
-  );
+  return report.estimates.flatMap((e) => {
+    if (e.status === "unestimable" && e.detail !== undefined) return [`${e.name}: ${e.detail}`];
+    if (e.status === "estimated" && e.merge?.sizing.by === "range") {
+      return [`${e.name} (MERGE): ${e.merge.sizing.detail}`];
+    }
+    return [];
+  });
 }

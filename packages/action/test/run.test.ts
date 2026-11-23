@@ -56,6 +56,35 @@ describe("runCheck", () => {
       "orders_daily: Syntax error: Unclosed string literal 'secret-customer-id'",
     ]);
   });
+
+  it("logs why a MERGE dry run failed, but keeps it out of the comment", async () => {
+    const merging = (m: Model): Model => ({
+      ...m,
+      type: "incremental",
+      incrementalQuery: m.query,
+      merge: { uniqueKey: ["id"] },
+    });
+    const { report, comment } = await runCheck({
+      config: DEFAULT_CONFIG,
+      loadModels: (side) => Promise.resolve([merging(side === "base" ? base : head)]),
+      runner: new FakeDryRunner(
+        [
+          [base.query, { bytes: 1 }],
+          [head.query, { bytes: 2 }],
+        ],
+        {
+          error: "Permission bigquery.tables.updateData denied on 'secret'",
+          errorKind: "permission-denied",
+        },
+        [[base.target, { columns: ["id"], bytes: 100 }]],
+      ),
+    });
+    expect(comment).toContain("needs write access to the table");
+    expect(comment).not.toContain("secret");
+    expect(failureDetails(report)).toEqual([
+      "orders_daily (MERGE): Permission bigquery.tables.updateData denied on 'secret'",
+    ]);
+  });
 });
 
 describe("runCheck history", () => {

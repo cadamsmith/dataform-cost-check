@@ -45778,6 +45778,33 @@ var BigQueryDryRunner = class {
     return { bytes: Number(bytes), partitionedTables };
   }
   /**
+   * The existing table's top-level columns and logical size, for sizing a MERGE. Reads
+   * metadata only (`tables.get`, free). Undefined when the table does not exist, is not a
+   * table, or the lookup fails for any reason: the model is then sized from its query.
+   */
+  async table(target) {
+    const parts = target.split(".");
+    if (parts.length < 2) return void 0;
+    const table = parts.at(-1) ?? "";
+    const dataset = parts.at(-2) ?? "";
+    const project = parts.length > 2 ? parts.slice(0, -2).join(".") : this.#projectId;
+    try {
+      const e2 = encodeURIComponent;
+      const response = await this.#fetch(
+        `${API_ROOT2}/projects/${e2(project)}/datasets/${e2(dataset)}/tables/${e2(table)}?fields=type,numBytes,schema/fields/name`,
+        { headers: { authorization: `Bearer ${await this.#getAccessToken()}` } }
+      );
+      if (!response.ok) return void 0;
+      const meta = await response.json();
+      const columns = (meta.schema?.fields ?? []).flatMap((f3) => f3.name ? [f3.name] : []);
+      if (meta.type !== "TABLE" || columns.length === 0) return void 0;
+      if (meta.numBytes === void 0 || !/^\d+$/.test(meta.numBytes)) return void 0;
+      return { columns, bytes: Number(meta.numBytes) };
+    } catch {
+      return void 0;
+    }
+  }
+  /**
    * Which of the tables a dry run read are partitioned, for the partition-filter
    * heuristic. Extra detail only: a lookup that fails for any reason (no access, a
    * wildcard table, rate limits) leaves that table out instead of failing the estimate.
@@ -46105,6 +46132,21 @@ function withViewReaders(changes, base, head) {
   return out.sort((x2, y) => x2.target.localeCompare(y.target));
 }
 
+// ../core/src/merge.ts
+function mergeSql(target, columns, query, uniqueKey, updatePartitionFilter) {
+  const backtickedColumns = columns.map((column) => `\`${column}\``);
+  return `
+merge \`${target}\` T
+using (${query}
+) S
+on ${uniqueKey.map((uniqueKeyCol) => `T.${uniqueKeyCol} = S.${uniqueKeyCol}`).join(` and `)}
+  ${updatePartitionFilter ? `and T.${updatePartitionFilter}` : ""}
+when matched then
+  update set ${columns.map((column) => `\`${column}\` = S.${column}`).join(",")}
+when not matched then
+  insert (${backtickedColumns.join(",")}) values (${backtickedColumns.join(",")})`;
+}
+
 // ../core/src/render.ts
 var COMMENT_MARKER = "<!-- dataform-cost-check -->";
 function commentMarker(projectDir = ".") {
@@ -46336,13 +46378,18 @@ function formatUsd(amount, { signed = false } = {}) {
   return `${sign}$${body}`;
 }
 function mergeNote(name, merge) {
-  const start = `- \`${name}\`: has a unique key, so each run is a MERGE that also reads`;
-  const end = "Those bytes are not included, so this model's figure is a lower bound.";
-  if (merge.readsOwnTable) {
-    const filter = merge.partitionFiltered ? " Its `updatePartitionFilter` does not limit that read, because the query also reads this table." : "";
-    return `${start} the whole existing table. ${end}${filter}`;
+  const start = merge.baseOnly === true ? `- \`${name}\`: had a unique key before this change, so each run at base is a MERGE` : `- \`${name}\`: has a unique key, so each run is a MERGE`;
+  if (merge.sizing.by === "merge") {
+    return `${start}. Sized by a dry run of that MERGE, including its read of the existing table.`;
   }
-  return merge.partitionFiltered ? `${start} the table's partitions matching its update filter. ${end}` : `${start} the whole existing table. ${end} An \`updatePartitionFilter\` limits that read.`;
+  const reads2 = `${start} that also reads part or all of the existing table.`;
+  if (merge.sizing.by === "range") {
+    const why = merge.sizing.errorKind === "permission-denied" ? "A dry run of the MERGE needs write access to the table, which the check's account does not have" : "The dry run of the MERGE failed (BigQuery's message is in the job log)";
+    return `${reads2} ${why}, so ${merge.baseOnly === true ? "the base figure" : "this model's figure"} covers its query alone: each run reads between ${formatBytes(merge.sizing.fromBytes)} and ${formatBytes(merge.sizing.toBytes)} (with the whole table).`;
+  }
+  const filter = merge.readsOwnTable ? merge.partitionFiltered ? " Its `updatePartitionFilter` does not limit that read, because the query also reads this table." : "" : merge.partitionFiltered ? "" : " An `updatePartitionFilter` can limit that read.";
+  const figure = merge.baseOnly === true ? "the base figure" : "this model's figure";
+  return `${reads2} Those bytes are not included, so ${figure} is a lower bound.${filter}`;
 }
 
 // ../core/src/estimate.ts
@@ -46434,11 +46481,11 @@ async function estimateChange(change, runner, config, newTargets = /* @__PURE__ 
   }
   const baseModel = change.kind === "modified" ? change.base : model;
   const involvesIncremental = base?.incrementalQuery !== void 0 || head?.incrementalQuery !== void 0;
-  const rebuild = (baseBytes, headBytes) => baseBytes === void 0 || headBytes === void 0 ? void 0 : {
-    baseBytes,
-    headBytes,
-    baseUsd: bytesToTib(baseBytes) * pricePerTibFor(baseModel, config),
-    headUsd: bytesToTib(headBytes) * pricePerTibFor(model, config)
+  const rebuild = (baseBytes2, headBytes2) => baseBytes2 === void 0 || headBytes2 === void 0 ? void 0 : {
+    baseBytes: baseBytes2,
+    headBytes: headBytes2,
+    baseUsd: bytesToTib(baseBytes2) * pricePerTibFor(baseModel, config),
+    headUsd: bytesToTib(headBytes2) * pricePerTibFor(model, config)
   };
   for (const side of [base, head]) {
     if (side === void 0) continue;
@@ -46512,6 +46559,18 @@ async function estimateChange(change, runner, config, newTargets = /* @__PURE__ 
     }
     return { ...common, ...dryRunFailed("head", headResult) };
   }
+  const merged = await sizeMerges(
+    change.target,
+    base,
+    head,
+    baseResult.bytes,
+    headResult.bytes,
+    runner
+  );
+  const baseBytes = merged?.baseBytes ?? baseResult.bytes;
+  const headBytes = merged?.headBytes ?? headResult.bytes;
+  const shown = change.kind === "removed" ? base : head;
+  const mergeModel = shown?.merge !== void 0 ? shown : base?.merge !== void 0 ? base : void 0;
   const runsPerDay = runsPerDayFor(model, config);
   const pricePerTib = pricePerTibFor(model, config);
   const baseRunsPerDay = runsPerDayFor(baseModel, config);
@@ -46525,23 +46584,61 @@ async function estimateChange(change, runner, config, newTargets = /* @__PURE__ 
     status: "estimated",
     ...common,
     ...model.location !== void 0 && { location: model.location },
-    baseBytes: baseResult.bytes,
-    headBytes: headResult.bytes,
+    baseBytes,
+    headBytes,
     runsPerDay,
     ...baseRunsPerDay !== runsPerDay && { baseRunsPerDay },
     pricePerTib,
-    monthlyDelta: monthlyCost(headResult.bytes, pricePerTib, runsPerDay) - monthlyCost(baseResult.bytes, basePricePerTib, baseRunsPerDay),
+    monthlyDelta: monthlyCost(headBytes, pricePerTib, runsPerDay) - monthlyCost(baseBytes, basePricePerTib, baseRunsPerDay),
     ...likelyCause !== void 0 && { likelyCause },
-    ...head?.merge !== void 0 && {
+    ...mergeModel?.merge !== void 0 && merged !== void 0 && {
       merge: {
-        ...head.merge,
-        readsOwnTable: steadyStateSql(head).includes(`\`${change.target}\``)
+        partitionFiltered: mergeModel.merge.updatePartitionFilter !== void 0,
+        readsOwnTable: steadyStateSql(mergeModel).includes(`\`${change.target}\``),
+        sizing: merged.sizing,
+        ...mergeModel !== shown && { baseOnly: true }
       }
     },
     ...change.kind === "modified" && change.viaViews !== void 0 && { viaViews: change.viaViews },
     ...fullRefreshResult !== void 0 && "bytes" in fullRefreshResult && { fullRefreshBytes: fullRefreshResult.bytes },
     ...fullRefresh !== void 0 && { fullRefresh },
     ...involvesIncremental && { involvesIncremental }
+  };
+}
+async function sizeMerges(target, base, head, baseBytes, headBytes, runner) {
+  if (base?.merge === void 0 && head?.merge === void 0) return void 0;
+  const table = runner.table === void 0 ? void 0 : await runner.table(target);
+  if (table === void 0) return { baseBytes, headBytes, sizing: { by: "query" } };
+  const mergeRun = (side) => side?.merge === void 0 ? void 0 : runner.estimate(
+    mergeSql(
+      target,
+      table.columns,
+      steadyStateSql(side),
+      side.merge.uniqueKey,
+      side.merge.updatePartitionFilter
+    ),
+    side.location
+  );
+  const [baseRun, headRun] = await Promise.all([mergeRun(base), mergeRun(head)]);
+  const failed = [headRun, baseRun].find((r2) => r2 !== void 0 && "error" in r2);
+  if (failed !== void 0) {
+    const fromBytes = head?.merge !== void 0 ? headBytes : baseBytes;
+    return {
+      baseBytes,
+      headBytes,
+      sizing: {
+        by: "range",
+        fromBytes,
+        toBytes: fromBytes + table.bytes,
+        errorKind: failed.errorKind,
+        detail: failed.error
+      }
+    };
+  }
+  return {
+    baseBytes: baseRun !== void 0 && "bytes" in baseRun ? baseRun.bytes : baseBytes,
+    headBytes: headRun !== void 0 && "bytes" in headRun ? headRun.bytes : headBytes,
+    sizing: { by: "merge" }
   };
 }
 async function estimateChanges(changes, runner, config) {
@@ -46606,16 +46703,21 @@ function limitConcurrency(runner, max) {
   if (!Number.isInteger(max) || max < 1) throw new RangeError("max must be a positive integer");
   let active = 0;
   const waiting = [];
+  async function limited(call) {
+    if (active >= max) await new Promise((resolve2) => waiting.push(resolve2));
+    active++;
+    try {
+      return await call();
+    } finally {
+      active--;
+      waiting.shift()?.();
+    }
+  }
+  const table = runner.table?.bind(runner);
   return {
-    async estimate(sql, location) {
-      if (active >= max) await new Promise((resolve2) => waiting.push(resolve2));
-      active++;
-      try {
-        return await runner.estimate(sql, location);
-      } finally {
-        active--;
-        waiting.shift()?.();
-      }
+    estimate: (sql, location) => limited(() => runner.estimate(sql, location)),
+    ...table !== void 0 && {
+      table: (target) => limited(() => table(target))
     }
   };
 }
@@ -46748,7 +46850,12 @@ function toModel(action, type, location, query) {
     ...action.incrementalPreOps !== void 0 && action.incrementalPreOps.length > 0 && { incrementalPreOps: action.incrementalPreOps },
     tags: action.tags ?? [],
     ...type === "incremental" && (action.uniqueKey?.length ?? 0) > 0 && {
-      merge: { partitionFiltered: Boolean(action.bigquery?.updatePartitionFilter) }
+      merge: {
+        uniqueKey: action.uniqueKey ?? [],
+        ...action.bigquery?.updatePartitionFilter && {
+          updatePartitionFilter: action.bigquery.updatePartitionFilter
+        }
+      }
     },
     ...location !== void 0 && { location }
   };
@@ -47016,9 +47123,13 @@ function partitionFilterFailure(report) {
   return `${names.join(", ")}: reads a table that requires a partition filter, and this change leaves the query without one, so it would fail when it runs.`;
 }
 function failureDetails(report) {
-  return report.estimates.flatMap(
-    (e2) => e2.status === "unestimable" && e2.detail !== void 0 ? [`${e2.name}: ${e2.detail}`] : []
-  );
+  return report.estimates.flatMap((e2) => {
+    if (e2.status === "unestimable" && e2.detail !== void 0) return [`${e2.name}: ${e2.detail}`];
+    if (e2.status === "estimated" && e2.merge?.sizing.by === "range") {
+      return [`${e2.name} (MERGE): ${e2.merge.sizing.detail}`];
+    }
+    return [];
+  });
 }
 
 // src/main.ts

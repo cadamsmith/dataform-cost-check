@@ -177,6 +177,15 @@ A dry run is free and reads no data: BigQuery only plans the query and reports t
 would scan. The action never runs a billable query and needs no write access. Data Viewer also covers the table metadata the action reads to tell which tables are
 partitioned, which it uses to name a lost partition filter.
 
+**Unique-key incremental models** run as a MERGE, which also reads the existing table.
+The action looks up that table's columns and size (Data Viewer on the model's own dataset
+covers this, even when the model's query does not read it). BigQuery allows a dry run of the
+MERGE only with write access to the table (`bigquery.tables.updateData`), even though a dry
+run writes nothing. With it, the estimate is sized from the MERGE itself, including its read
+of the table. Without it, the comment gives a range for that model: its query alone, up to
+its query plus the whole table. Don't grant write access just for this: the range is the
+intended read-only result.
+
 Checked on 2026-11-20 with a service account that had nothing else. With Job User alone,
 the dry run is denied. With Job User and Metadata Viewer, the table metadata reads but the
 dry run is still denied ("does not have permission to query table"). With Job User and

@@ -92,9 +92,9 @@ jobs:
         with:
           node-version: 22
       # Match your project's Dataform version: the 3.x CLI needs a @dataform/core with the
-      # same major.minor (for example cli 3.1.6 with core 3.1.x, or cli 3.0.61 with core
+      # same major.minor (for example cli 3.1.8 with core 3.1.x, or cli 3.0.61 with core
       # 3.0.x). Dataform 2: @dataform/cli@2.9.0.
-      - run: npm install -g @dataform/cli@3.1.6
+      - run: npm install -g @dataform/cli@3.1.8
       # Only if your project has a package.json that pins @dataform/core:
       - run: npm ci
       # Pin a release's full commit SHA (see the release page), not a tag.

@@ -135,10 +135,11 @@ reports "not estimated" with a reason.
   `incrementalPredicates` included. CLI 3.0.x and core 2.x differ only in alias names
   (`T`/`S` for `DATAFORM_DEST`/`DATAFORM_SOURCE`) and whitespace, which do not change the
   bytes (both forms dry-ran to 258,085,598 on the sandbox's `terms_daily`). A test runs
-  Dataform's own `mergeInto` out of the installed bundle and compares: exactly for 3.1.x,
-  up to aliases and whitespace for older versions. It runs in CI (CLI 3.1.6) and nightly (the
-  oldest and newest 3.x CLI, and core 2.9.0), so drift fails a build (it caught the 3.1.x
-  change). Models with
+  Dataform's own `mergeInto` out of the installed bundle and compares: exactly for 3.1.8,
+  up to quoting, aliases and whitespace for older versions. It runs in CI (CLI 3.1.8) and
+  nightly (the oldest and newest 3.x CLI, and core 2.9.0), so drift fails a build (it caught
+  the 3.1.x change, and 3.1.8's, which quotes the source columns in the update set and
+  moves the query's parentheses to the caller: #132). Models with
   `incrementalStrategy: INSERT_OVERWRITE` (3.1+) run a different script, a staging table
   and a partition-replacing MERGE, so they get no MERGE sizing. They get their own note
   instead: the figure is the query alone, a lower bound (`Estimate.insertOverwrite`). `DryRunner.table` reads the target's columns and logical size with

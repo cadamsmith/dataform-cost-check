@@ -9,9 +9,9 @@ import { mergeSql } from "@dataform-cost-check/core";
  * Drift guard for `core.mergeSql`, our copy of the MERGE Dataform runs for unique-key
  * incrementals. It takes Dataform's own BigQuery `mergeInto` out of an installed bundle,
  * runs it, and checks our statement is identical. The nightly canary runs it against the
- * oldest and the newest 3.x CLI, CI against 3.1.6, and the nightly 2.x job against core
- * 2.9.0. 3.1.x must match
- * exactly; older versions only up to alias names and whitespace (see `mergeSql`).
+ * oldest and the newest 3.x CLI, CI against 3.1.8, and the nightly 2.x job against core
+ * 2.9.0. 3.1.8 and later must match exactly; older versions only up to quoting, alias
+ * names and whitespace (see `mergeSql`).
  */
 
 /** The 3.x CLI builds the MERGE itself: its bundle sits next to the `dataform` binary. */
@@ -74,43 +74,62 @@ function compile(method: { params: string[]; body: string }): (...args: unknown[
 /**
  * The BigQuery adapter's `mergeInto` from a bundle. 3.1.x takes the table's `bigquery`
  * options as its fifth argument and calls `buildIncrementalPredicatesString`; older
- * versions take the update filter itself.
+ * versions take the update filter itself. 3.1.8 also calls `colsList` and
+ * `resolveDmlTarget`, and its caller, not `mergeInto`, puts the query in parentheses.
+ * `exact` marks the version `mergeSql` copies.
  */
-export function extractMergeInto(source: string): { mergeInto: MergeInto; current: boolean } {
+export function extractMergeInto(source: string): {
+  mergeInto: MergeInto;
+  current: boolean;
+  exact: boolean;
+} {
   const merge = extractMethod(source, "mergeInto", 5);
   if (merge === undefined) throw new Error("No five-parameter mergeInto in the bundle");
   const predicates = extractMethod(source, "buildIncrementalPredicatesString", 1);
   const current =
     predicates !== undefined && merge.body.includes("buildIncrementalPredicatesString");
+  const colsList = extractMethod(source, "colsList", 1);
+  const resolveDmlTarget = extractMethod(source, "resolveDmlTarget", 2);
+  const exact = current && merge.body.includes("this.colsList(");
+  if (exact && (colsList === undefined || resolveDmlTarget === undefined)) {
+    throw new Error("mergeInto calls colsList, but the bundle has no colsList or resolveDmlTarget");
+  }
   const adapter = {
     resolveTarget: (t: Target) => `\`${t.database}.${t.schema}.${t.name}\``,
     ...(predicates !== undefined && { buildIncrementalPredicatesString: compile(predicates) }),
+    ...(colsList !== undefined && { colsList: compile(colsList) }),
+    ...(resolveDmlTarget !== undefined && { resolveDmlTarget: compile(resolveDmlTarget) }),
   };
   const fn = compile(merge);
   return {
     current,
+    exact,
     mergeInto: (target, columns, query, uniqueKey, options) =>
       fn.call(
         adapter,
         target,
         columns,
-        query,
+        exact ? `(${query}\n)` : query,
         uniqueKey,
         current ? options : options.updatePartitionFilter,
       ),
   };
 }
 
-/** Aliases and whitespace, which older versions differ in, do not change a dry run's bytes. */
+/**
+ * Quoting, aliases and whitespace, which older versions differ in, do not change a dry
+ * run's bytes.
+ */
 const loosely = (sql: string) =>
   sql
+    .replace(/`(\w+)`/g, "$1")
     .replaceAll("DATAFORM_DEST", "T")
     .replaceAll("DATAFORM_SOURCE", "S")
     .replace(/\s+/g, " ")
     .trim();
 
 function expectSameAsDataform(bundle: string) {
-  const { mergeInto, current } = extractMergeInto(bundle);
+  const { mergeInto, current, exact } = extractMergeInto(bundle);
   const target = { database: "proj", schema: "analytics", name: "orders" };
   const query = "SELECT id, v, day FROM `proj.raw.orders` WHERE day > '2026-01-01'";
   const cases: MergeOptions[] = [
@@ -135,7 +154,7 @@ function expectSameAsDataform(bundle: string) {
       options,
     );
     const theirs = mergeInto(target, ["id", "v", "day"], query, ["id", "day"], options);
-    if (current) expect(ours).toBe(theirs);
+    if (exact) expect(ours).toBe(theirs);
     else expect(loosely(ours)).toBe(loosely(theirs));
   }
 }

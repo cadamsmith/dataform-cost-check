@@ -46144,7 +46144,7 @@ using (${query}
 on ${uniqueKey.map((uniqueKeyCol) => `DATAFORM_DEST.${uniqueKeyCol} = DATAFORM_SOURCE.${uniqueKeyCol}`).join(` and `)} ${updatePartitionFilter ? `and DATAFORM_DEST.${updatePartitionFilter}` : ""}
 ${incrementalPredicatesString ? ` ${incrementalPredicatesString}` : ""}
 when matched then
-  update set ${columns.map((column) => `\`${column}\` = DATAFORM_SOURCE.${column}`).join(",")}
+  update set ${columns.map((column) => `\`${column}\` = DATAFORM_SOURCE.\`${column}\``).join(",")}
 when not matched then
   insert (${backtickedColumns.join(",")}) values (${backtickedColumns.join(",")})`;
 }

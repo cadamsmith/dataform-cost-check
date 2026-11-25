@@ -35,7 +35,7 @@ jobs:
       # own dependencies carry advisories it cannot fix (glob, minimatch), reported as this
       # repo's.
       - name: Install the Dataform CLI
-        run: npm install -g @dataform/cli@3.1.6 # zizmor: ignore[adhoc-packages]
+        run: npm install -g @dataform/cli@3.1.8 # zizmor: ignore[adhoc-packages]
 
       - name: Lint
         run: pnpm lint

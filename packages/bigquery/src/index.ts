@@ -223,5 +223,5 @@ export class BigQueryDryRunner implements DryRunner {
     }
   }
 }
-export { jobRebuilt, jobTarget, readRefreshHistory } from "./history.ts";
+export { jobRebuilt, jobTarget, onReservation, readRefreshHistory } from "./history.ts";
 export type { JobHistoryOptions } from "./history.ts";

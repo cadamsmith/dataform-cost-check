@@ -129,7 +129,7 @@ export function renderComment(
     if (notes.length > 0 && fits([""])) body.push(...notes, "");
   }
 
-  const historyLines = historySection(report);
+  const historyLines = historySection(report, configPath);
   const historyShown = historyLines.length > 0 && fits(historyLines);
   if (historyShown) body.push(...historyLines);
 
@@ -159,7 +159,7 @@ export function renderComment(
  * Last runs of the changed models, from job records. Labelled as history: it says what a
  * run took, never what the next one will.
  */
-function historySection(report: Report): string[] {
+function historySection(report: Report, configPath: string): string[] {
   const history = report.history;
   if (history === undefined) return [];
   const title = "**Last refresh** (history from BigQuery job records, not a forecast)";
@@ -190,6 +190,30 @@ function historySection(report: Report): string[] {
     `From ${searched}. Models not listed had no run there. ` +
       "Bytes read is what that run processed, pre-operations included: history of the current " +
       "version, not part of the monthly estimate.",
+    "",
+    ...reservationNote(report, configPath),
+  ];
+}
+
+/**
+ * When the last runs used a slot reservation (Editions), dollars per byte likely don't
+ * apply. Said only while the comment shows dollar figures (a price above 0 per TiB).
+ */
+function reservationNote(report: Report, configPath: string): string[] {
+  if (report.history?.status !== "ok") return [];
+  const runs = report.history.runs;
+  const reserved = report.estimates.filter((e) => runs[e.target]?.onReservation === true);
+  const priced = report.estimates.some((e) => e.status === "estimated" && e.pricePerTib > 0);
+  if (reserved.length === 0 || !priced) return [];
+  const which =
+    reserved.length === 1
+      ? `\`${reserved[0]?.name ?? ""}\`'s last run`
+      : `${String(reserved.length)} of these last runs`;
+  return [
+    `**Slot reservation:** ${which} used a slot reservation (Editions pricing), which charges for ` +
+      "slot capacity, not bytes. The on-demand dollar figures above likely don't apply to those " +
+      "models; slot-hours are the closer measure. To show bytes instead of dollars, set " +
+      `\`price_per_tib: 0\` in \`${configPath}\`.`,
     "",
   ];
 }

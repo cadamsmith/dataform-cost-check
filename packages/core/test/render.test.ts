@@ -350,6 +350,47 @@ describe("refresh history", () => {
     expect(off).not.toContain("Its last run read");
   });
 
+  describe("slot reservations", () => {
+    const run = {
+      endedAt: "2026-11-20T19:58:12.000Z",
+      durationMs: 95_000,
+      slotMs: 7_200_000,
+      onReservation: true,
+    };
+    const withRuns = (runs: Record<string, typeof run>, estimates = [ordersDaily, customers]) =>
+      renderComment(
+        report({
+          estimates,
+          totalMonthlyDelta: 6750.92,
+          history: { status: "ok", days: 7, project: "proj", jobsRead: 120, complete: true, runs },
+        }),
+        { configPath: "dataform/cost-check.yml" },
+      );
+
+    it("says dollar figures likely don't apply to a model that ran on a reservation", () => {
+      const body = withRuns({ [ordersDaily.target]: run });
+      expect(body).toContain(
+        "**Slot reservation:** `orders_daily`'s last run used a slot reservation (Editions pricing)",
+      );
+      expect(body).toContain("set `price_per_tib: 0` in `dataform/cost-check.yml`.");
+      const note = body.split("\n").find((line) => line.startsWith("**Slot reservation:**"));
+      expect(note?.replace("cost-check.yml", "")).not.toMatch(/\bcosts?\b/i);
+    });
+
+    it("counts several reserved runs", () => {
+      const body = withRuns({ [ordersDaily.target]: run, [customers.target]: run });
+      expect(body).toContain("**Slot reservation:** 2 of these last runs used a slot reservation");
+    });
+
+    it("says nothing on demand, or when the comment already shows bytes only", () => {
+      expect(withRuns({ [ordersDaily.target]: { ...run, onReservation: false } })).not.toContain(
+        "Slot reservation",
+      );
+      const unpriced = [ordersDaily, customers].map((e) => ({ ...e, pricePerTib: 0 }));
+      expect(withRuns({ [ordersDaily.target]: run }, unpriced)).not.toContain("Slot reservation");
+    });
+  });
+
   it("says why history is missing, and when no run was found", () => {
     const off = renderComment(
       report({

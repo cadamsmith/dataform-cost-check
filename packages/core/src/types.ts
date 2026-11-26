@@ -311,6 +311,18 @@ export interface RefreshRun {
   readonly durationMs: number;
   /** Slot time used; for slot-based (Editions) pricing, this is what is paid for. */
   readonly slotMs: number;
+  /**
+   * Bytes the run processed (`totalBytesProcessed`), the same measure as the dry-run
+   * figures. For a SCRIPT job, everything it ran, pre-operations included. Undefined when
+   * the job record has none.
+   */
+  readonly bytesProcessed?: number;
+  /**
+   * True when the run rebuilt the table (`CREATE TABLE ... AS SELECT`), false when it added
+   * to it (`INSERT`, `MERGE`). Matters for incremental models: a full refresh reads far
+   * more than a steady-state run.
+   */
+  readonly rebuilt?: boolean;
 }
 
 /** Last runs of the changed models, when the team opted in. */

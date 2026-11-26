@@ -46,6 +46,15 @@ its scope, how the check works, and the hard cases it must handle.
   by its own `INSERT INTO` / `MERGE` / `CREATE OR REPLACE TABLE` target, matched in memory
   and never shown. Child jobs cannot be listed together with `allUsers`, which is why the
   script's SQL is matched. Checked live against a real Dataform run.
+  Bytes read (#118): each row also shows the run's `totalBytesProcessed`, the same measure
+  as the dry-run figures (billed differed by under 1% in the #119 runs, from per-child MiB
+  rounding). For a SCRIPT it is the parent job, which equals the sum of its children,
+  pre-operations included (#119). An incremental model's run is marked "(full refresh)"
+  when it rebuilt the table (`CREATE_TABLE_AS_SELECT`, or `CREATE [OR REPLACE] TABLE` in
+  the script) rather than adding to it: a full refresh read about 4× an incremental run
+  (#119). Models a dry run can't size (pre-operations variables or temp tables) point to
+  that figure. It is the base version only, so it stays out of the monthly figure and the
+  limit.
 
 ### Paid tier (not in this repository; do not build here)
 

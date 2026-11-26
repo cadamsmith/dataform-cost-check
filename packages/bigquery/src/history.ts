@@ -28,6 +28,7 @@ interface Job {
     readonly startTime?: string;
     readonly endTime?: string;
     readonly totalSlotMs?: string;
+    readonly totalBytesProcessed?: string;
     readonly query?: { readonly ddlTargetTable?: TableRef; readonly statementType?: string };
   };
   readonly status?: { readonly errorResult?: unknown };
@@ -58,14 +59,32 @@ export function jobTarget(job: Job, targets: ReadonlySet<string>): string | unde
   if (named !== undefined) return targets.has(named) ? named : undefined;
   const sql = job.configuration?.query?.query ?? "";
   for (const target of targets) {
-    const quoted = `\`${target}\``.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const write = new RegExp(
-      `(INSERT\\s+INTO|MERGE(\\s+INTO)?|CREATE\\s+OR\\s+REPLACE\\s+TABLE|CREATE\\s+TABLE)\\s+${quoted}`,
-      "i",
-    );
-    if (write.test(sql)) return target;
+    if (writes(sql, target, ADDS) || writes(sql, target, REBUILDS)) return target;
   }
   return undefined;
+}
+
+const ADDS = String.raw`INSERT\s+INTO|MERGE(\s+INTO)?`;
+const REBUILDS = String.raw`CREATE\s+OR\s+REPLACE\s+TABLE|CREATE\s+TABLE`;
+
+/** Whether `sql` writes `target` with one of the statements in `statements`. */
+function writes(sql: string, target: string, statements: string): boolean {
+  const quoted = `\`${target}\``.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(${statements})\\s+${quoted}`, "i").test(sql);
+}
+
+/**
+ * Whether a job that wrote `target` rebuilt it (a full refresh) or added to it (an
+ * incremental run). Undefined when it can't tell, e.g. a script that does both.
+ */
+export function jobRebuilt(job: Job, target: string): boolean | undefined {
+  const type = job.statistics?.query?.statementType;
+  if (type === "CREATE_TABLE_AS_SELECT") return true;
+  if (type === "INSERT" || type === "MERGE") return false;
+  const sql = job.configuration?.query?.query ?? "";
+  const adds = writes(sql, target, ADDS);
+  const rebuilds = writes(sql, target, REBUILDS);
+  return adds === rebuilds ? undefined : rebuilds;
 }
 
 /**
@@ -118,10 +137,15 @@ export async function readRefreshHistory(
       const start = Number(job.statistics?.startTime);
       const end = Number(job.statistics?.endTime);
       if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+      const bytes = Number(job.statistics?.totalBytesProcessed);
+      const rebuilt = jobRebuilt(job, target);
       runs[target] = {
         endedAt: new Date(end).toISOString(),
         durationMs: end - start,
         slotMs: Number(job.statistics?.totalSlotMs ?? 0),
+        ...(job.statistics?.totalBytesProcessed !== undefined &&
+          Number.isFinite(bytes) && { bytesProcessed: bytes }),
+        ...(rebuilt !== undefined && { rebuilt }),
       };
       wanted.delete(target);
     }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { jobTarget, readRefreshHistory } from "../src/index.ts";
+import { jobRebuilt, jobTarget, readRefreshHistory } from "../src/index.ts";
 
 const T = "proj.analytics.orders_daily";
 
@@ -13,6 +13,7 @@ const ctas = {
     startTime: "1763660000000",
     endTime: "1763660002500",
     totalSlotMs: "7200000",
+    totalBytesProcessed: "1067347121",
     query: { statementType: "CREATE_TABLE_AS_SELECT" },
   },
 };
@@ -27,6 +28,7 @@ const script = {
     startTime: "1763660000000",
     endTime: "1763660090000",
     totalSlotMs: "1000",
+    totalBytesProcessed: "241456014",
     query: { statementType: "SCRIPT" },
   },
 };
@@ -78,6 +80,37 @@ describe("jobTarget", () => {
   });
 });
 
+describe("jobRebuilt", () => {
+  const withSql = (query: string) => ({
+    configuration: { query: { query } },
+    statistics: { query: { statementType: "SCRIPT" } },
+  });
+
+  it("reads the statement type of a job that names its table", () => {
+    expect(jobRebuilt(ctas, T)).toBe(true);
+    const insert = { statistics: { query: { statementType: "INSERT" } } };
+    expect(jobRebuilt(insert, T)).toBe(false);
+    const merge = { statistics: { query: { statementType: "MERGE" } } };
+    expect(jobRebuilt(merge, T)).toBe(false);
+  });
+
+  it("tells a SCRIPT's full refresh from its incremental run", () => {
+    expect(jobRebuilt(script, T)).toBe(false);
+    const full = withSql(
+      "DECLARE checkpoint DATE; CREATE OR REPLACE TABLE `proj.analytics.orders_daily` AS SELECT 1 AS a",
+    );
+    expect(jobRebuilt(full, T)).toBe(true);
+  });
+
+  it("says nothing when a script both rebuilds and adds, or writes neither", () => {
+    const both = withSql(
+      "CREATE TABLE `proj.analytics.orders_daily` AS SELECT 1 AS a; INSERT INTO `proj.analytics.orders_daily` SELECT 2",
+    );
+    expect(jobRebuilt(both, T)).toBeUndefined();
+    expect(jobRebuilt(withSql("SELECT 1"), T)).toBeUndefined();
+  });
+});
+
 describe("readRefreshHistory", () => {
   const options = (f: typeof fetch) => ({
     projectId: "proj",
@@ -96,10 +129,23 @@ describe("readRefreshHistory", () => {
       jobsRead: 3,
       complete: true,
       runs: {
-        [T]: { endedAt: new Date(1763660002500).toISOString(), durationMs: 2500, slotMs: 7200000 },
+        [T]: {
+          endedAt: new Date(1763660002500).toISOString(),
+          durationMs: 2500,
+          slotMs: 7200000,
+          bytesProcessed: 1067347121,
+          rebuilt: true,
+        },
       },
     });
     expect(urls[0]).toContain("allUsers=true");
+  });
+
+  it("leaves bytes out when the job record has none", async () => {
+    const { totalBytesProcessed: _, ...statistics } = ctas.statistics;
+    const { fetch } = fetchReturning(200, { jobs: [{ ...ctas, statistics }] });
+    const history = await readRefreshHistory([T], options(fetch));
+    expect(history.status === "ok" && history.runs[T]).not.toHaveProperty("bytesProcessed");
   });
 
   it("follows pages until every table is found", async () => {
@@ -109,7 +155,10 @@ describe("readRefreshHistory", () => {
       { jobs: [script] },
     );
     const history = await readRefreshHistory([T], options(fetch));
-    expect(history).toMatchObject({ status: "ok", runs: { [T]: { durationMs: 90000 } } });
+    expect(history).toMatchObject({
+      status: "ok",
+      runs: { [T]: { durationMs: 90000, bytesProcessed: 241456014, rebuilt: false } },
+    });
     expect(urls[1]).toContain("pageToken=p2");
   });
 

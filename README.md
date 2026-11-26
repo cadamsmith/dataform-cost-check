@@ -75,8 +75,9 @@ count for each, and posts one sticky comment. A fuller example, with every secti
   before and after, for teams that rebuild from scratch. Kept out of the monthly figure
 - Flags the most common cause of a jump: a lost partition filter
 - One configurable spending limit that can fail the check
-- Last refresh duration (and slot-hours, for slot-based pricing) per table, shown as history
-  when you opt in by granting job-listing access. Never a billed query, never a forecast.
+- Last refresh duration, bytes read (and slot-hours, for slot-based pricing) per table,
+  shown as history when you opt in by granting job-listing access. Never a billed query,
+  never a forecast.
 - Says plainly what it did not estimate, and why: a read of a table the same pull request
   creates, a filter on a variable or a read of a temp table set up in pre-operations, a view (it costs nothing until read),
   a just-in-time action (its SQL exists only when the workflow runs)
@@ -170,8 +171,10 @@ through Workload Identity Federation. Grant it only:
 History is read from that project's job records, so it shows runs only when Dataform runs
 its jobs there too. The role lets the account list everyone's jobs in the project, SQL
 included (matched in memory, never posted); grant it only if you want history. The action then reads the free job records (`jobs.list`) and shows
-each changed model's last run: when, how long, and slot-hours, which is what slot-based
-(Editions) pricing charges for. It is history, never a forecast. Without the role, the
+each changed model's last run: when, how long, the bytes it read (marked when an
+incremental model's run was a full refresh), and slot-hours, which is what slot-based
+(Editions) pricing charges for. For a model a dry run can't size, such as an incremental
+that filters on a checkpoint declared in pre-operations, that last run is the only figure. It is history, never a forecast. Without the role, the
 comment says history is unavailable and the check carries on.
 
 A dry run is free and reads no data: BigQuery only plans the query and reports the bytes it

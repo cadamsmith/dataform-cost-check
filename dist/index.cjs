@@ -45638,14 +45638,24 @@ function jobTarget(job, targets) {
   if (named !== void 0) return targets.has(named) ? named : void 0;
   const sql = job.configuration?.query?.query ?? "";
   for (const target of targets) {
-    const quoted = `\`${target}\``.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const write = new RegExp(
-      `(INSERT\\s+INTO|MERGE(\\s+INTO)?|CREATE\\s+OR\\s+REPLACE\\s+TABLE|CREATE\\s+TABLE)\\s+${quoted}`,
-      "i"
-    );
-    if (write.test(sql)) return target;
+    if (writes(sql, target, ADDS) || writes(sql, target, REBUILDS)) return target;
   }
   return void 0;
+}
+var ADDS = String.raw`INSERT\s+INTO|MERGE(\s+INTO)?`;
+var REBUILDS = String.raw`CREATE\s+OR\s+REPLACE\s+TABLE|CREATE\s+TABLE`;
+function writes(sql, target, statements) {
+  const quoted = `\`${target}\``.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(${statements})\\s+${quoted}`, "i").test(sql);
+}
+function jobRebuilt(job, target) {
+  const type = job.statistics?.query?.statementType;
+  if (type === "CREATE_TABLE_AS_SELECT") return true;
+  if (type === "INSERT" || type === "MERGE") return false;
+  const sql = job.configuration?.query?.query ?? "";
+  const adds = writes(sql, target, ADDS);
+  const rebuilds = writes(sql, target, REBUILDS);
+  return adds === rebuilds ? void 0 : rebuilds;
 }
 async function readRefreshHistory(targets, options) {
   const fetchImpl = options.fetch ?? fetch;
@@ -45684,10 +45694,14 @@ async function readRefreshHistory(targets, options) {
       const start = Number(job.statistics?.startTime);
       const end = Number(job.statistics?.endTime);
       if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+      const bytes = Number(job.statistics?.totalBytesProcessed);
+      const rebuilt = jobRebuilt(job, target);
       runs2[target] = {
         endedAt: new Date(end).toISOString(),
         durationMs: end - start,
-        slotMs: Number(job.statistics?.totalSlotMs ?? 0)
+        slotMs: Number(job.statistics?.totalSlotMs ?? 0),
+        ...job.statistics?.totalBytesProcessed !== void 0 && Number.isFinite(bytes) && { bytesProcessed: bytes },
+        ...rebuilt !== void 0 && { rebuilt }
       };
       wanted.delete(target);
     }
@@ -46227,12 +46241,14 @@ function renderComment(report, {
     if (notes.length > 0 && fits([""])) body.push(...notes, "");
   }
   const historyLines = historySection(report);
-  if (historyLines.length > 0 && fits(historyLines)) body.push(...historyLines);
+  const historyShown = historyLines.length > 0 && fits(historyLines);
+  if (historyShown) body.push(...historyLines);
   let listed = 0;
   if (notEstimated.length > 0 && fits(["**Not estimated**", "", ""])) {
     const items = [];
     for (const e2 of notEstimated) {
-      const line = `- \`${e2.name}\` (${e2.kind}): ${e2.reason}`;
+      const pointer = historyShown ? lastRunPointer(report, e2) : "";
+      const line = `- \`${e2.name}\` (${e2.kind}): ${e2.reason}${pointer}`;
       if (!fits([line])) break;
       items.push(line);
     }
@@ -46256,7 +46272,7 @@ function historySection(report) {
   const rows = report.estimates.flatMap((e2) => {
     const run = history.runs[e2.target];
     return run === void 0 ? [] : [
-      `| \`${e2.name}\` | ${run.endedAt.slice(0, 16).replace("T", " ")} UTC | ${formatDuration(run.durationMs)} | ${formatSlotHours(run.slotMs)} |`
+      `| \`${e2.name}\` | ${run.endedAt.slice(0, 16).replace("T", " ")} UTC | ${formatDuration(run.durationMs)} | ${runBytes(e2, run) ?? "\u2013"} | ${formatSlotHours(run.slotMs)} |`
     ];
   });
   const searched = history.complete ? `the last ${String(history.days)} days of \`${history.project}\`'s job records` : `the most recent ${history.jobsRead.toLocaleString("en-US")} job records of \`${history.project}\` (a busy project: older runs were not searched)`;
@@ -46266,13 +46282,23 @@ function historySection(report) {
   return [
     title,
     "",
-    "| Model | Last run | Took | Slot-hours |",
-    "|---|---|--:|--:|",
+    "| Model | Last run | Took | Bytes read | Slot-hours |",
+    "|---|---|--:|--:|--:|",
     ...rows,
     "",
-    `From ${searched}. Models not listed had no run there.`,
+    `From ${searched}. Models not listed had no run there. Bytes read is what that run processed, pre-operations included: history of the current version, not part of the monthly estimate.`,
     ""
   ];
+}
+function runBytes(e2, run) {
+  if (run.bytesProcessed === void 0) return void 0;
+  const bytes = formatBytes(run.bytesProcessed);
+  return e2.type === "incremental" && run.rebuilt === true ? `${bytes} (full refresh)` : bytes;
+}
+function lastRunPointer(report, e2) {
+  const run = report.history?.status === "ok" ? report.history.runs[e2.target] : void 0;
+  const bytes = run === void 0 ? void 0 : runBytes(e2, run);
+  return bytes === void 0 ? "" : ` Its last run read ${bytes}; see **Last refresh**.`;
 }
 function formatDuration(ms) {
   if (ms < 6e4) return `${(ms / 1e3).toFixed(1)} s`;

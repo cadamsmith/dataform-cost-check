@@ -1,5 +1,5 @@
 import { formatRuns } from "./pricing.ts";
-import type { Estimate, LikelyCause, Report } from "./types.ts";
+import type { Estimate, LikelyCause, RefreshRun, Report } from "./types.ts";
 
 type Estimated = Extract<Estimate, { status: "estimated" }>;
 type NotEstimated = Exclude<Estimate, { status: "estimated" }>;
@@ -130,13 +130,15 @@ export function renderComment(
   }
 
   const historyLines = historySection(report);
-  if (historyLines.length > 0 && fits(historyLines)) body.push(...historyLines);
+  const historyShown = historyLines.length > 0 && fits(historyLines);
+  if (historyShown) body.push(...historyLines);
 
   let listed = 0;
   if (notEstimated.length > 0 && fits(["**Not estimated**", "", ""])) {
     const items: string[] = [];
     for (const e of notEstimated) {
-      const line = `- \`${e.name}\` (${e.kind}): ${e.reason}`;
+      const pointer = historyShown ? lastRunPointer(report, e) : "";
+      const line = `- \`${e.name}\` (${e.kind}): ${e.reason}${pointer}`;
       if (!fits([line])) break;
       items.push(line);
     }
@@ -169,7 +171,7 @@ function historySection(report: Report): string[] {
     return run === undefined
       ? []
       : [
-          `| \`${e.name}\` | ${run.endedAt.slice(0, 16).replace("T", " ")} UTC | ${formatDuration(run.durationMs)} | ${formatSlotHours(run.slotMs)} |`,
+          `| \`${e.name}\` | ${run.endedAt.slice(0, 16).replace("T", " ")} UTC | ${formatDuration(run.durationMs)} | ${runBytes(e, run) ?? "–"} | ${formatSlotHours(run.slotMs)} |`,
         ];
   });
   const searched = history.complete
@@ -181,13 +183,32 @@ function historySection(report: Report): string[] {
   return [
     title,
     "",
-    "| Model | Last run | Took | Slot-hours |",
-    "|---|---|--:|--:|",
+    "| Model | Last run | Took | Bytes read | Slot-hours |",
+    "|---|---|--:|--:|--:|",
     ...rows,
     "",
-    `From ${searched}. Models not listed had no run there.`,
+    `From ${searched}. Models not listed had no run there. ` +
+      "Bytes read is what that run processed, pre-operations included: history of the current " +
+      "version, not part of the monthly estimate.",
     "",
   ];
+}
+
+/**
+ * Bytes a past run processed, marked when an incremental model's run was a full refresh,
+ * which reads far more than a steady-state run.
+ */
+function runBytes(e: Estimate, run: RefreshRun): string | undefined {
+  if (run.bytesProcessed === undefined) return undefined;
+  const bytes = formatBytes(run.bytesProcessed);
+  return e.type === "incremental" && run.rebuilt === true ? `${bytes} (full refresh)` : bytes;
+}
+
+/** For a model a dry run could not size: what its last run read, when history has it. */
+function lastRunPointer(report: Report, e: Estimate): string {
+  const run = report.history?.status === "ok" ? report.history.runs[e.target] : undefined;
+  const bytes = run === undefined ? undefined : runBytes(e, run);
+  return bytes === undefined ? "" : ` Its last run read ${bytes}; see **Last refresh**.`;
 }
 
 function formatDuration(ms: number): string {

@@ -267,14 +267,87 @@ describe("refresh history", () => {
               endedAt: "2026-11-20T19:58:12.000Z",
               durationMs: 95_000,
               slotMs: 7_200_000,
+              bytesProcessed: 241_456_014,
+              rebuilt: false,
             },
           },
         },
       }),
     );
     expect(body).toContain("**Last refresh** (history from BigQuery job records, not a forecast)");
-    expect(body).toContain("| `orders_daily` | 2026-11-20 19:58 UTC | 1.6 min | 2.000 |");
+    expect(body).toContain(
+      "| `orders_daily` | 2026-11-20 19:58 UTC | 1.6 min | 230.27 MiB | 2.000 |",
+    );
+    expect(body).toContain("Bytes read is what that run processed, pre-operations included");
     expect(body).not.toContain("| `customers` | 2026");
+  });
+
+  it("marks an incremental model's full refresh, and shows a dash without bytes", () => {
+    const body = renderComment(
+      report({
+        estimates: [ordersDaily, customers],
+        totalMonthlyDelta: 6750.92,
+        history: {
+          status: "ok",
+          days: 7,
+          project: "proj",
+          jobsRead: 120,
+          complete: true,
+          runs: {
+            [ordersDaily.target]: {
+              endedAt: "2026-11-20T19:58:12.000Z",
+              durationMs: 95_000,
+              slotMs: 7_200_000,
+              bytesProcessed: 1_067_347_121,
+              rebuilt: true,
+            },
+            // A plain table rebuilds on every run: nothing to mark.
+            [customers.target]: {
+              endedAt: "2026-11-20T18:00:00.000Z",
+              durationMs: 2_000,
+              slotMs: 1_000,
+              rebuilt: true,
+            },
+          },
+        },
+      }),
+    );
+    expect(body).toContain("| 1017.90 MiB (full refresh) | 2.000 |");
+    expect(body).toContain("| `customers` | 2026-11-20 18:00 UTC | 2.0 s | – | <0.001 |");
+  });
+
+  it("points a model a dry run could not size to its last run's bytes", () => {
+    const checkpoint: Estimate = {
+      status: "unestimable",
+      target: "proj.analytics.events_inc",
+      name: "events_inc",
+      kind: "modified",
+      type: "incremental",
+      reason:
+        "Filters on `checkpoint`, a variable set in pre_operations, which a dry run cannot size.",
+    };
+    const history = {
+      status: "ok" as const,
+      days: 7,
+      project: "proj",
+      jobsRead: 120,
+      complete: true,
+      runs: {
+        [checkpoint.target]: {
+          endedAt: "2026-11-20T19:58:12.000Z",
+          durationMs: 95_000,
+          slotMs: 7_200_000,
+          bytesProcessed: 241_456_014,
+          rebuilt: false,
+        },
+      },
+    };
+    const body = renderComment(report({ estimates: [checkpoint], history }));
+    expect(body).toContain(
+      "which a dry run cannot size. Its last run read 230.27 MiB; see **Last refresh**.",
+    );
+    const off = renderComment(report({ estimates: [checkpoint] }));
+    expect(off).not.toContain("Its last run read");
   });
 
   it("says why history is missing, and when no run was found", () => {

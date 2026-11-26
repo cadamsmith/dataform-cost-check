@@ -323,6 +323,12 @@ export interface RefreshRun {
    * more than a steady-state run.
    */
   readonly rebuilt?: boolean;
+  /**
+   * True when the job record names a slot reservation (`statistics.reservation_id`): the
+   * run was paid for in slots (Editions), not per byte. Only the fact is kept, never the
+   * reservation's name.
+   */
+  readonly onReservation?: boolean;
 }
 
 /** Last runs of the changed models, when the team opted in. */

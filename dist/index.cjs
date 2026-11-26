@@ -45657,6 +45657,10 @@ function jobRebuilt(job, target) {
   const rebuilds = writes(sql, target, REBUILDS);
   return adds === rebuilds ? void 0 : rebuilds;
 }
+function onReservation(job) {
+  const id = job.statistics?.reservation_id?.trim() ?? "";
+  return id !== "" && id !== "default-pipeline";
+}
 async function readRefreshHistory(targets, options) {
   const fetchImpl = options.fetch ?? fetch;
   const wanted = new Set(targets);
@@ -45701,7 +45705,8 @@ async function readRefreshHistory(targets, options) {
         durationMs: end - start,
         slotMs: Number(job.statistics?.totalSlotMs ?? 0),
         ...job.statistics?.totalBytesProcessed !== void 0 && Number.isFinite(bytes) && { bytesProcessed: bytes },
-        ...rebuilt !== void 0 && { rebuilt }
+        ...rebuilt !== void 0 && { rebuilt },
+        ...onReservation(job) && { onReservation: true }
       };
       wanted.delete(target);
     }
@@ -46240,7 +46245,7 @@ function renderComment(report, {
     }
     if (notes.length > 0 && fits([""])) body.push(...notes, "");
   }
-  const historyLines = historySection(report);
+  const historyLines = historySection(report, configPath);
   const historyShown = historyLines.length > 0 && fits(historyLines);
   if (historyShown) body.push(...historyLines);
   let listed = 0;
@@ -46262,7 +46267,7 @@ function renderComment(report, {
   }
   return [...head, ...body, tail].join("\n") + "\n";
 }
-function historySection(report) {
+function historySection(report, configPath) {
   const history = report.history;
   if (history === void 0) return [];
   const title = "**Last refresh** (history from BigQuery job records, not a forecast)";
@@ -46287,6 +46292,19 @@ function historySection(report) {
     ...rows,
     "",
     `From ${searched}. Models not listed had no run there. Bytes read is what that run processed, pre-operations included: history of the current version, not part of the monthly estimate.`,
+    "",
+    ...reservationNote(report, configPath)
+  ];
+}
+function reservationNote(report, configPath) {
+  if (report.history?.status !== "ok") return [];
+  const runs2 = report.history.runs;
+  const reserved = report.estimates.filter((e2) => runs2[e2.target]?.onReservation === true);
+  const priced = report.estimates.some((e2) => e2.status === "estimated" && e2.pricePerTib > 0);
+  if (reserved.length === 0 || !priced) return [];
+  const which2 = reserved.length === 1 ? `\`${reserved[0]?.name ?? ""}\`'s last run` : `${String(reserved.length)} of these last runs`;
+  return [
+    `**Slot reservation:** ${which2} used a slot reservation (Editions pricing), which charges for slot capacity, not bytes. The on-demand dollar figures above likely don't apply to those models; slot-hours are the closer measure. To show bytes instead of dollars, set \`price_per_tib: 0\` in \`${configPath}\`.`,
     ""
   ];
 }

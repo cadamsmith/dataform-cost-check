@@ -174,7 +174,9 @@ included (matched in memory, never posted); grant it only if you want history. T
 each changed model's last run: when, how long, the bytes it read (marked when an
 incremental model's run was a full refresh), and slot-hours, which is what slot-based
 (Editions) pricing charges for. For a model a dry run can't size, such as an incremental
-that filters on a checkpoint declared in pre-operations, that last run is the only figure. It is history, never a forecast. Without the role, the
+that filters on a checkpoint declared in pre-operations, that last run is the only figure. If
+those runs used a slot reservation (Editions pricing), the comment says the on-demand dollar
+figures likely don't apply to them. It is history, never a forecast. Without the role, the
 comment says history is unavailable and the check carries on.
 
 A dry run is free and reads no data: BigQuery only plans the query and reports the bytes it

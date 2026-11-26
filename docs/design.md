@@ -55,6 +55,13 @@ its scope, how the check works, and the hard cases it must handle.
   (#119). Models a dry run can't size (pre-operations variables or temp tables) point to
   that figure. It is the base version only, so it stays out of the monthly figure and the
   limit.
+  Reservation hint (#91, 2026-11-26): when a model's last run names a slot reservation
+  (`statistics.reservation_id`, absent for on-demand jobs; the shared `default-pipeline`
+  is ignored), the history section says the on-demand dollar figures likely don't apply to
+  it and points to slot-hours and `price_per_tib: 0`. Only that fact is kept, never the
+  reservation's name. It reuses the job records history already reads: no new permission,
+  no billed query, no reservation API. Shown only while the comment shows dollars. It
+  detects nothing without `history: true`, and says nothing of the dry-run project itself.
 
 ### Paid tier (not in this repository; do not build here)
 

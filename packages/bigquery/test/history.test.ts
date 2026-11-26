@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { jobRebuilt, jobTarget, readRefreshHistory } from "../src/index.ts";
+import { jobRebuilt, jobTarget, onReservation, readRefreshHistory } from "../src/index.ts";
 
 const T = "proj.analytics.orders_daily";
 
@@ -111,6 +111,19 @@ describe("jobRebuilt", () => {
   });
 });
 
+describe("onReservation", () => {
+  it("is true when the job names a reservation, false on demand", () => {
+    const reserved = { statistics: { reservation_id: "admin-proj:US.prod" } };
+    expect(onReservation(reserved)).toBe(true);
+    expect(onReservation(ctas)).toBe(false);
+    expect(onReservation({ statistics: { reservation_id: "" } })).toBe(false);
+  });
+
+  it("ignores the shared default pipeline, which is not a paid reservation", () => {
+    expect(onReservation({ statistics: { reservation_id: "default-pipeline" } })).toBe(false);
+  });
+});
+
 describe("readRefreshHistory", () => {
   const options = (f: typeof fetch) => ({
     projectId: "proj",
@@ -139,6 +152,17 @@ describe("readRefreshHistory", () => {
       },
     });
     expect(urls[0]).toContain("allUsers=true");
+  });
+
+  it("records that a run used a reservation, never its name", async () => {
+    const reserved = {
+      ...ctas,
+      statistics: { ...ctas.statistics, reservation_id: "admin-proj:US.prod" },
+    };
+    const { fetch } = fetchReturning(200, { jobs: [reserved] });
+    const history = await readRefreshHistory([T], options(fetch));
+    expect(history).toMatchObject({ runs: { [T]: { onReservation: true } } });
+    expect(JSON.stringify(history)).not.toContain("admin-proj");
   });
 
   it("leaves bytes out when the job record has none", async () => {

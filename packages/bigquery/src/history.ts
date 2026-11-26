@@ -29,6 +29,8 @@ interface Job {
     readonly endTime?: string;
     readonly totalSlotMs?: string;
     readonly totalBytesProcessed?: string;
+    /** The primary reservation the job ran on; absent for on-demand jobs. */
+    readonly reservation_id?: string;
     readonly query?: { readonly ddlTargetTable?: TableRef; readonly statementType?: string };
   };
   readonly status?: { readonly errorResult?: unknown };
@@ -85,6 +87,16 @@ export function jobRebuilt(job: Job, target: string): boolean | undefined {
   const adds = writes(sql, target, ADDS);
   const rebuilds = writes(sql, target, REBUILDS);
   return adds === rebuilds ? undefined : rebuilds;
+}
+
+/**
+ * Whether a job ran on a slot reservation (Editions) rather than on-demand. BigQuery names
+ * the reservation in `statistics.reservation_id`; on-demand jobs have none. `default-pipeline`
+ * is the shared pool for free batch loads, not a reservation the team pays for.
+ */
+export function onReservation(job: Job): boolean {
+  const id = job.statistics?.reservation_id?.trim() ?? "";
+  return id !== "" && id !== "default-pipeline";
 }
 
 /**
@@ -146,6 +158,7 @@ export async function readRefreshHistory(
         ...(job.statistics?.totalBytesProcessed !== undefined &&
           Number.isFinite(bytes) && { bytesProcessed: bytes }),
         ...(rebuilt !== undefined && { rebuilt }),
+        ...(onReservation(job) && { onReservation: true }),
       };
       wanted.delete(target);
     }
